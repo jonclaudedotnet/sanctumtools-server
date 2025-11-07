@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: sanctumtools-server
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: AWS_REGION
+        value: us-east-1
+      - key: PORT
+        value: 3000
