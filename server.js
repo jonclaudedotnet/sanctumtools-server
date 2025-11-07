@@ -1,6 +1,7 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
+const DynamoDBStore = require('connect-dynamodb')(session);
 const path = require('path');
 const crypto = require('crypto');
 const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, CreateTableCommand, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
@@ -20,14 +21,20 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(cookieParser());
 
-// Session configuration - stored in DynamoDB
+// Session configuration - persisted to DynamoDB
 app.use(session({
+  store: new DynamoDBStore({
+    client: dynamodb,
+    table: 'sanctumtools-sessions',
+    prefix: 'sess:'
+  }),
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
