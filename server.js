@@ -25,8 +25,10 @@ app.use(cookieParser());
 app.use(session({
   store: new DynamoDBStore({
     client: dynamodb,
-    table: 'sanctumtools-sessions',
-    prefix: 'sess:'
+    table: 'sanctumtools-sessions-new',
+    prefix: 'sess:',
+    touchAfter: 24 * 60 * 60, // Update TTL every 24 hours
+    ttl: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
   }),
   secret: SESSION_SECRET,
   resave: false,
@@ -36,18 +38,52 @@ app.use(session({
     httpOnly: true,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  }
+  },
+  name: 'sanctum.sid' // Custom cookie name for better security
 }));
 
 // View engine setup
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// Session debugging middleware (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`[Session Debug] ${req.method} ${req.path}`);
+    console.log(`  Session ID: ${req.sessionID}`);
+    console.log(`  Session exists: ${!!req.session}`);
+    if (req.session) {
+      console.log(`  User: ${req.session.email || 'not logged in'}`);
+      console.log(`  Cookie maxAge: ${req.session.cookie.maxAge}`);
+    }
+    next();
+  });
+}
+
 // Helper function to check if user is logged in
 function isAuthenticated(req, res, next) {
-  if (req.session.email) {
+  // Check if session exists and has email
+  if (req.session && req.session.email) {
+    // Regenerate session ID periodically for security (once per day)
+    const lastRegenerated = req.session.lastRegenerated || Date.now();
+    if (Date.now() - lastRegenerated > 24 * 60 * 60 * 1000) {
+      req.session.lastRegenerated = Date.now();
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error('Session regeneration error:', err);
+        }
+      });
+    }
     return next();
   }
+
+  // For API routes, return 401 instead of redirecting
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  // Store the original URL to redirect back after login
+  req.session.returnTo = req.originalUrl;
   res.redirect('/');
 }
 
@@ -87,7 +123,11 @@ function detectCrisisKeywords(message) {
     'take my life', 'taking my life', 'end everything',
     'can\'t go on', 'cannot go on', 'done with life',
     'plan to die', 'method to die', 'way to die',
-    'goodbye forever', 'final goodbye', 'this is goodbye'
+    'goodbye forever', 'final goodbye', 'this is goodbye',
+    'life isn\'t worth living', 'life is not worth living',
+    'not worth living', 'worthless to live', 'why live',
+    'why go on', 'why continue', 'what\'s the point of living',
+    'no point in living', 'tired of living', 'tired of life'
   ];
 
   // Check for direct crisis keywords
@@ -203,8 +243,8 @@ async function logCrisisEvent(email, message, keywords, response) {
     const ttl = Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60); // 90 days from now
 
     const item = {
-      email: { S: email },
-      timestamp: { N: timestamp.toString() },
+      userEmail: { S: email },  // Changed from 'email' to 'userEmail' to match table schema
+      timestamp: { S: timestamp.toString() },  // Changed to String type to match table schema
       message: { S: message.substring(0, 500) }, // Truncate for privacy
       detected_keywords: { SS: keywords.length > 0 ? keywords : ['no_keywords'] },
       response_given: { S: response },
@@ -367,10 +407,18 @@ app.post('/verify-setup', async (req, res) => {
     // Clear setup session and create authenticated session
     req.session.email = setupEmail;
     req.session.onboardingComplete = false;
+    req.session.loginTime = Date.now();
     delete req.session.setupEmail;
     delete req.session.setupSecret;
 
-    res.redirect('/onboarding');
+    // Save session explicitly before redirecting
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.render('setup-2fa', { error: 'Session creation failed. Please try again.' });
+      }
+      res.redirect('/onboarding');
+    });
   } catch (error) {
     console.error('Setup verification error:', error);
     res.render('setup-2fa', { error: 'Verification failed. Please try again.' });
@@ -414,12 +462,28 @@ app.post('/login', async (req, res) => {
     // Set session
     req.session.email = email;
     req.session.onboardingComplete = user.onboardingComplete || false;
+    req.session.loginTime = Date.now();
 
-    if (user.onboardingComplete) {
-      res.redirect('/dashboard');
-    } else {
-      res.redirect('/onboarding');
-    }
+    // Save session explicitly before redirecting
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.render('login', { error: 'Session creation failed. Please try again.' });
+      }
+
+      // Check if there's a returnTo URL
+      const returnTo = req.session.returnTo;
+      delete req.session.returnTo;
+
+      // Redirect based on onboarding status or returnTo
+      if (returnTo && returnTo !== '/' && returnTo !== '/login') {
+        res.redirect(returnTo);
+      } else if (user.onboardingComplete) {
+        res.redirect('/dashboard');
+      } else {
+        res.redirect('/onboarding');
+      }
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.render('login', { error: 'Login failed. Please try again.' });
@@ -726,8 +790,8 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
             await dynamodb.send(new UpdateItemCommand({
               TableName: 'sanctumtools-crisis-events',
               Key: {
-                email: { S: email },
-                timestamp: { N: req.session.lastCrisisTime.toString() }
+                userEmail: { S: email },  // Changed from 'email' to 'userEmail' to match table schema
+                timestamp: { S: req.session.lastCrisisTime.toString() }  // Changed to String type to match table schema
               },
               UpdateExpression: 'SET user_confirmed_safe = :true, safety_confirmed_at = :now',
               ExpressionAttributeValues: marshall({
@@ -850,9 +914,41 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
   }
 });
 
+// Session status endpoint (for debugging)
+app.get('/api/session-status', (req, res) => {
+  const status = {
+    authenticated: !!req.session?.email,
+    sessionId: req.sessionID,
+    user: req.session?.email || null,
+    onboardingComplete: req.session?.onboardingComplete || false,
+    loginTime: req.session?.loginTime || null,
+    cookieMaxAge: req.session?.cookie?.maxAge || null,
+    cookieExpires: req.session?.cookie?.expires || null
+  };
+
+  res.json(status);
+});
+
 // Logout
 app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
+  // Store session ID for logging
+  const sessionId = req.sessionID;
+  const userEmail = req.session ? req.session.email : 'unknown';
+
+  req.session.destroy((err) => {
+    if (err) {
+      console.error(`Logout error for ${userEmail}:`, err);
+      return res.status(500).send('Failed to logout');
+    }
+
+    // Clear the session cookie
+    res.clearCookie('sanctum.sid', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    });
+
+    console.log(`User ${userEmail} logged out successfully (session: ${sessionId})`);
     res.redirect('/');
   });
 });

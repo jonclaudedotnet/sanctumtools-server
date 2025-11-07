@@ -10,6 +10,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.400.0",
     "@aws-sdk/util-dynamodb": "^3.400.0",
+    "axios": "^1.13.2",
     "connect-dynamodb": "^3.0.5",
     "cookie-parser": "^1.4.6",
     "dotenv": "^16.0.3",

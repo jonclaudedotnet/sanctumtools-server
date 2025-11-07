@@ -209,7 +209,7 @@
         </div>
       <% } %>
 
-      <form method="POST" id="onboardingForm">
+      <form method="POST" action="/complete-onboarding" id="onboardingForm">
         <!-- Basic Information Section -->
         <div class="form-section">
           <h2 class="section-title">
@@ -234,19 +234,18 @@
           </div>
 
           <div class="input-group">
-            <label for="age" class="input-group-label">Age (Optional)</label>
+            <label for="companionName" class="input-group-label required">AI Companion Name</label>
             <input
-              type="number"
-              id="age"
-              name="age"
+              type="text"
+              id="companionName"
+              name="companionName"
               class="form-input"
-              min="13"
-              max="120"
-              placeholder="Your age"
-              aria-label="Age"
-              aria-describedby="age-help"
+              placeholder="Name your AI companion"
+              required
+              aria-label="Companion name"
+              aria-describedby="companion-help"
             >
-            <span class="form-help" id="age-help">Helps us provide age-appropriate resources</span>
+            <span class="form-help" id="companion-help">Choose a name for your AI mental health companion</span>
           </div>
         </div>
 
@@ -267,128 +266,59 @@
           </div>
 
           <div class="input-group">
-            <label for="conditions" class="input-group-label">Primary Concerns (Optional)</label>
+            <label for="diagnosis" class="input-group-label required">Primary Diagnosis or Concerns</label>
             <textarea
-              id="conditions"
-              name="conditions"
+              id="diagnosis"
+              name="diagnosis"
               class="form-textarea"
               rows="3"
               placeholder="e.g., anxiety, depression, bipolar disorder, PTSD..."
+              required
               aria-label="Primary mental health concerns"
-              aria-describedby="conditions-help"
+              aria-describedby="diagnosis-help"
             ></textarea>
-            <span class="form-help" id="conditions-help">Share what you're comfortable with - you can update this anytime</span>
+            <span class="form-help" id="diagnosis-help">Share what you're comfortable with - you can update this anytime</span>
           </div>
 
           <div class="input-group">
-            <label class="input-group-label">Are you currently in therapy?</label>
-            <div class="radio-group" role="radiogroup" aria-labelledby="therapy-label">
-              <label class="radio-option">
-                <input type="radio" name="inTherapy" value="yes">
-                <span class="radio-indicator"></span>
-                <div class="radio-content">
-                  <span class="radio-label">Yes, I'm seeing a therapist</span>
-                  <span class="radio-description">We'll complement your professional care</span>
-                </div>
-              </label>
-              <label class="radio-option">
-                <input type="radio" name="inTherapy" value="no">
-                <span class="radio-indicator"></span>
-                <div class="radio-content">
-                  <span class="radio-label">No, not currently</span>
-                  <span class="radio-description">We'll provide self-help resources</span>
-                </div>
-              </label>
-              <label class="radio-option">
-                <input type="radio" name="inTherapy" value="considering">
-                <span class="radio-indicator"></span>
-                <div class="radio-content">
-                  <span class="radio-label">Considering it</span>
-                  <span class="radio-description">We can help you explore options</span>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Emergency Contact Section -->
-        <div class="form-section">
-          <h2 class="section-title">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            Safety Planning
-          </h2>
-
-          <div class="alert alert-info" role="status">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <strong>Optional but recommended</strong>
-              <p class="text-small mt-xs">Adding an emergency contact helps us support you during crisis situations. This person will only be contacted with your consent or in emergency situations.</p>
-            </div>
+            <label for="medications" class="input-group-label">Current Medications (Optional)</label>
+            <textarea
+              id="medications"
+              name="medications"
+              class="form-textarea"
+              rows="2"
+              placeholder="List any medications you're currently taking (separate with commas)"
+              aria-label="Current medications"
+              aria-describedby="medications-help"
+            ></textarea>
+            <span class="form-help" id="medications-help">This helps us provide medication-aware support</span>
           </div>
 
           <div class="input-group">
-            <label for="emergencyContact" class="input-group-label">Emergency Contact Name</label>
-            <input
-              type="text"
-              id="emergencyContact"
-              name="emergencyContact"
-              class="form-input"
-              placeholder="Trusted friend or family member"
-              aria-label="Emergency contact name"
-            >
-          </div>
-
-          <div class="input-group">
-            <label for="emergencyPhone" class="input-group-label">Emergency Contact Phone</label>
-            <input
-              type="tel"
-              id="emergencyPhone"
-              name="emergencyPhone"
-              class="form-input"
-              placeholder="+1 (555) 123-4567"
-              aria-label="Emergency contact phone"
-            >
-          </div>
-        </div>
-
-        <!-- AI Preferences Section -->
-        <div class="form-section">
-          <h2 class="section-title">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            AI Companion Preferences
-          </h2>
-
-          <div class="input-group">
-            <label class="input-group-label">Communication Style</label>
-            <div class="radio-group" role="radiogroup">
+            <label class="input-group-label required">Sleep Schedule</label>
+            <div class="radio-group" role="radiogroup" aria-labelledby="sleep-label">
               <label class="radio-option">
-                <input type="radio" name="aiStyle" value="supportive" checked>
+                <input type="radio" name="sleepSchedule" value="regular" required>
                 <span class="radio-indicator"></span>
                 <div class="radio-content">
-                  <span class="radio-label">Supportive & Empathetic</span>
-                  <span class="radio-description">Warm, understanding, and validating</span>
+                  <span class="radio-label">Regular (7-9 hours)</span>
+                  <span class="radio-description">Consistent bedtime and wake time</span>
                 </div>
               </label>
               <label class="radio-option">
-                <input type="radio" name="aiStyle" value="practical">
+                <input type="radio" name="sleepSchedule" value="irregular">
                 <span class="radio-indicator"></span>
                 <div class="radio-content">
-                  <span class="radio-label">Practical & Direct</span>
-                  <span class="radio-description">Solution-focused and straightforward</span>
+                  <span class="radio-label">Irregular</span>
+                  <span class="radio-description">Variable sleep patterns</span>
                 </div>
               </label>
               <label class="radio-option">
-                <input type="radio" name="aiStyle" value="educational">
+                <input type="radio" name="sleepSchedule" value="insomnia">
                 <span class="radio-indicator"></span>
                 <div class="radio-content">
-                  <span class="radio-label">Educational & Informative</span>
-                  <span class="radio-description">Explains concepts and provides resources</span>
+                  <span class="radio-label">Difficulty sleeping</span>
+                  <span class="radio-description">Insomnia or sleep issues</span>
                 </div>
               </label>
             </div>
@@ -409,7 +339,9 @@
 
   <script>
     // Add loading state to form submission
-    document.getElementById('onboardingForm').addEventListener('submit', function(e) {
+    document.getElementById('onboardingForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
       const button = this.querySelector('button[type="submit"]');
       const btnText = document.getElementById('btn-text');
       const btnLoader = document.getElementById('btn-loader');
@@ -417,6 +349,37 @@
       button.disabled = true;
       btnText.style.display = 'none';
       btnLoader.style.display = 'inline-block';
+
+      // Get form data
+      const formData = new FormData(this);
+      const data = {};
+      formData.forEach((value, key) => {
+        data[key] = value;
+      });
+
+      try {
+        const response = await fetch('/complete-onboarding', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.redirectUrl) {
+          window.location.href = result.redirectUrl;
+        } else {
+          throw new Error(result.error || 'Failed to complete onboarding');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert(error.message || 'Failed to complete onboarding. Please try again.');
+        button.disabled = false;
+        btnText.style.display = 'inline-block';
+        btnLoader.style.display = 'none';
+      }
     });
 
     // Auto-save draft
