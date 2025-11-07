@@ -8,6 +8,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.3",
     "@aws-sdk/client-dynamodb": "^3.400.0",
     "@aws-sdk/util-dynamodb": "^3.400.0",
     "cookie-parser": "^1.4.6",
