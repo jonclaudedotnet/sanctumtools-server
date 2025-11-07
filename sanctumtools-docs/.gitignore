@@ -1,0 +1,20 @@
+# Personal tracking data - DO NOT COMMIT
+*_personal.md
+*_private.md
+my_*.md
+private/
+personal/
+
+# Backup files
+*.bak
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
