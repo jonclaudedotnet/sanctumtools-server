@@ -153,7 +153,8 @@
    2. BASE RESET & TYPOGRAPHY
    =================================================================== */
 
-* {
+/* CSS Reset / Normalize */
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -164,6 +165,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -172,6 +174,29 @@ body {
   line-height: var(--line-height-body);
   color: var(--color-text-primary);
   background-color: var(--color-background);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Remove default styles */
+ul, ol {
+  list-style: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+input, textarea, select {
+  font-family: inherit;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -281,6 +306,68 @@ a:hover {
 .hidden { display: none; }
 .block { display: block; }
 .inline-block { display: inline-block; }
+.inline-flex { display: inline-flex; }
+
+/* Additional flexbox utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-start {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.flex-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Width utilities */
+.w-full { width: 100%; }
+.w-half { width: 50%; }
+.w-third { width: 33.333%; }
+.w-quarter { width: 25%; }
+.max-w-full { max-width: 100%; }
+.min-h-screen { min-height: 100vh; }
+
+/* Position utilities */
+.relative { position: relative; }
+.absolute { position: absolute; }
+.fixed { position: fixed; }
+.sticky { position: sticky; }
+
+/* Background utilities */
+.bg-white { background-color: var(--color-white); }
+.bg-primary { background-color: var(--color-primary); }
+.bg-background { background-color: var(--color-background); }
+.bg-transparent { background-color: transparent; }
+
+/* Border utilities */
+.border { border: 1px solid var(--color-gray-200); }
+.border-2 { border: 2px solid var(--color-gray-200); }
+.border-none { border: none; }
+.border-primary { border-color: var(--color-primary); }
+.rounded { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-full { border-radius: var(--radius-full); }
+
+/* Shadow utilities */
+.shadow-none { box-shadow: none; }
+.shadow { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+.shadow-xl { box-shadow: var(--shadow-xl); }
 
 /* ===================================================================
    4. COMPONENT CLASSES
@@ -413,12 +500,34 @@ a:hover {
   margin-bottom: var(--spacing-lg);
 }
 
+.input-group {
+  margin-bottom: var(--spacing-lg);
+}
+
+.input-group-label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.input-group-label.required::after {
+  content: ' *';
+  color: var(--color-crisis);
+}
+
 .form-label {
   display: block;
   margin-bottom: var(--spacing-xs);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
+}
+
+.form-label.required::after {
+  content: ' *';
+  color: var(--color-crisis);
 }
 
 .form-input,
@@ -537,6 +646,107 @@ a:hover {
   background: var(--color-crisis-light);
   color: var(--color-crisis-dark);
   border-left: 4px solid var(--color-crisis);
+}
+
+/* Progress Bar */
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: var(--color-gray-200);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: var(--spacing-md) 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  border-radius: var(--radius-full);
+  transition: width var(--transition-base);
+}
+
+/* Step Progress */
+.step-progress {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-xl);
+  position: relative;
+}
+
+.step-progress::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-gray-200);
+  z-index: -1;
+}
+
+.step-progress-item {
+  text-align: center;
+  position: relative;
+  flex: 1;
+}
+
+.step-progress-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--color-gray-200);
+  margin: 0 auto var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-base);
+}
+
+.step-progress-item.active .step-progress-circle {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-primary);
+}
+
+.step-progress-item.completed .step-progress-circle {
+  background: var(--color-success);
+  color: var(--color-text-inverse);
+}
+
+.step-progress-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.step-progress-item.active .step-progress-label {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Loading States */
+.loader {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-gray-200);
+  border-top-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: spin 1s linear infinite;
+}
+
+.loader-lg {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+}
+
+.loader-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
 }
 
 /* Crisis Box */

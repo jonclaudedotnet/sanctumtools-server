@@ -4,199 +4,259 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Setup 2FA - SanctumTools</title>
+  <link rel="stylesheet" href="/css/design-system.css">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #F5F1E8 0%, #f0e8dd 100%);
+    .auth-container {
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      background: linear-gradient(135deg, var(--color-background) 0%, #f0e8dd 100%);
+      padding: var(--spacing-lg);
     }
 
     .auth-card {
-      background: white;
-      border-radius: 24px;
-      padding: 50px;
-      max-width: 480px;
+      background: var(--color-white);
+      border-radius: var(--radius-2xl);
+      padding: var(--spacing-2xl);
+      max-width: 520px;
       width: 100%;
-      box-shadow: 0 8px 32px rgba(153, 50, 168, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 8px 32px rgba(153, 50, 168, 0.15);
     }
 
-    h2 {
-      font-size: 26px;
-      font-weight: 700;
+    .auth-header {
       text-align: center;
-      margin-bottom: 15px;
-      color: #4a4a4a;
+      margin-bottom: var(--spacing-xl);
     }
 
-    p {
-      text-align: center;
-      color: #6a6a6a;
-      margin-bottom: 25px;
-      font-size: 14px;
+    .auth-title {
+      font-size: var(--font-size-2xl);
+      font-weight: var(--font-weight-bold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .auth-subtitle {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-base);
+      line-height: var(--line-height-relaxed);
     }
 
     .qr-container {
+      background: var(--color-gray-50);
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-xl);
       text-align: center;
-      margin: 30px 0;
-      padding: 20px;
-      background: #f9f9f9;
-      border-radius: 12px;
+      margin: var(--spacing-xl) 0;
     }
 
     .qr-container img {
       max-width: 200px;
       height: auto;
+      margin: 0 auto;
+      display: block;
+      border-radius: var(--radius-lg);
+    }
+
+    .secret-container {
+      background: var(--color-gray-50);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-md);
+      margin: var(--spacing-md) 0;
+    }
+
+    .secret-label {
+      display: block;
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      margin-bottom: var(--spacing-xs);
+      font-weight: var(--font-weight-medium);
     }
 
     .secret-code {
-      background: #f0f0f0;
-      padding: 12px;
-      border-radius: 8px;
-      font-family: monospace;
-      font-size: 13px;
-      text-align: center;
-      margin: 15px 0;
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-sm);
+      color: var(--color-primary);
       word-break: break-all;
-      color: #666;
-    }
-
-    .form-group {
-      margin-bottom: 24px;
-    }
-
-    label {
+      padding: var(--spacing-xs);
+      background: var(--color-white);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-gray-200);
       display: block;
-      margin-bottom: 10px;
-      font-weight: 700;
-      color: #4a4a4a;
-      font-size: 14px;
+      text-align: center;
+      user-select: all;
     }
 
-    input {
-      width: 100%;
-      padding: 14px 16px;
-      border: 2px solid #e8e1d5;
-      border-radius: 12px;
-      font-size: 16px;
-      color: #333;
-      background: #ffffff;
-      transition: border-color 0.2s;
+    .instructions-list {
+      list-style: none;
+      counter-reset: step-counter;
+      margin: var(--spacing-lg) 0;
     }
 
-    input:focus {
-      outline: none;
-      border-color: #9932a8;
-      box-shadow: 0 0 0 3px rgba(153, 50, 168, 0.1);
+    .instructions-list li {
+      counter-increment: step-counter;
+      position: relative;
+      padding-left: var(--spacing-xl);
+      margin-bottom: var(--spacing-md);
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
+      line-height: var(--line-height-relaxed);
     }
 
-    button {
-      width: 100%;
-      padding: 14px 24px;
-      font-size: 16px;
-      font-weight: 600;
-      border: none;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #9932a8 0%, #B565C7 100%);
-      color: white;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(153, 50, 168, 0.3);
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .error-message {
-      background: #fee;
-      border: 1px solid #fcc;
-      color: #c00;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 14px;
-    }
-
-    .info-text {
-      background: #f0f7ff;
-      border: 1px solid #cce7ff;
-      color: #0066cc;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 13px;
+    .instructions-list li::before {
+      content: counter(step-counter);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 24px;
+      height: 24px;
+      background: var(--color-primary);
+      color: var(--color-text-inverse);
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-bold);
     }
 
     @media (max-width: 480px) {
       .auth-card {
-        padding: 30px 20px;
+        padding: var(--spacing-lg);
       }
 
-      h2 {
-        font-size: 22px;
+      .qr-container {
+        padding: var(--spacing-lg);
+      }
+
+      .qr-container img {
+        max-width: 160px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="auth-card">
-    <h2>Setup Two-Factor Authentication</h2>
-    <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
-
-    <div class="qr-container">
-      <img src="<%= qrCode %>" alt="QR Code">
-    </div>
-
-    <div class="info-text">
-      <strong>Can't scan?</strong> Enter this code manually: <br>
-      <code style="font-family: monospace;"><%= secret %></code>
-    </div>
-
-    <% if (typeof error !== 'undefined' && error) { %>
-      <div class="error-message"><%= error %></div>
-    <% } %>
-
-    <form method="POST" action="/verify-setup">
-      <div class="form-group">
-        <label for="code">Enter 6-digit code from your app:</label>
-        <input
-          type="text"
-          id="code"
-          name="code"
-          placeholder="000000"
-          maxlength="6"
-          pattern="\d{6}"
-          required
-          autofocus
-          inputmode="numeric"
-        >
+  <div class="auth-container">
+    <div class="auth-card animate-fade-in">
+      <!-- Step Progress Indicator -->
+      <div class="step-progress mb-lg">
+        <div class="step-progress-item completed">
+          <div class="step-progress-circle">✓</div>
+          <div class="step-progress-label">Email</div>
+        </div>
+        <div class="step-progress-item active">
+          <div class="step-progress-circle">2</div>
+          <div class="step-progress-label">2FA Setup</div>
+        </div>
+        <div class="step-progress-item">
+          <div class="step-progress-circle">3</div>
+          <div class="step-progress-label">Profile</div>
+        </div>
       </div>
 
-      <button type="submit">Verify & Create Account</button>
-    </form>
+      <div class="auth-header">
+        <h1 class="auth-title">Secure Your Account</h1>
+        <p class="auth-subtitle">Set up two-factor authentication to protect your mental health data</p>
+      </div>
+
+      <div class="alert alert-info" role="status">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        <div>
+          <strong>Why 2FA?</strong>
+          <p class="text-small mt-xs">Two-factor authentication adds an extra layer of security to keep your sensitive health information safe.</p>
+        </div>
+      </div>
+
+      <ol class="instructions-list">
+        <li>Install an authenticator app on your phone (Google Authenticator, Authy, or Microsoft Authenticator)</li>
+        <li>Scan the QR code below with your authenticator app</li>
+        <li>Enter the 6-digit code from your app to verify setup</li>
+      </ol>
+
+      <div class="qr-container">
+        <img src="<%= qrCode %>" alt="Two-Factor Authentication QR Code" />
+      </div>
+
+      <div class="secret-container">
+        <span class="secret-label">Can't scan? Enter this code manually:</span>
+        <code class="secret-code"><%= secret %></code>
+      </div>
+
+      <% if (typeof error !== 'undefined' && error) { %>
+        <div class="alert alert-danger" role="alert">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <%= error %>
+        </div>
+      <% } %>
+
+      <form method="POST" action="/verify-setup" id="verifyForm">
+        <div class="input-group">
+          <label for="code" class="input-group-label required">Verification Code</label>
+          <input
+            type="text"
+            id="code"
+            name="code"
+            class="form-input"
+            placeholder="000000"
+            maxlength="6"
+            pattern="\d{6}"
+            required
+            autofocus
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            aria-label="Six digit verification code"
+            aria-required="true"
+            aria-describedby="code-help"
+          >
+          <span class="form-help" id="code-help">Enter the 6-digit code shown in your authenticator app</span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full btn-lg">
+          <span id="btn-text">Verify & Continue</span>
+          <span id="btn-loader" class="loader" style="display: none;"></span>
+        </button>
+      </form>
+    </div>
   </div>
 
   <script>
-    // Auto-focus to numeric input only
-    document.getElementById('code').addEventListener('input', (e) => {
+    // Auto-format numeric input
+    document.getElementById('code').addEventListener('input', function(e) {
       e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+    });
+
+    // Add loading state to form submission
+    document.getElementById('verifyForm').addEventListener('submit', function(e) {
+      const button = this.querySelector('button[type="submit"]');
+      const btnText = document.getElementById('btn-text');
+      const btnLoader = document.getElementById('btn-loader');
+
+      button.disabled = true;
+      btnText.style.display = 'none';
+      btnLoader.style.display = 'inline-block';
+    });
+
+    // Copy secret code on click
+    document.querySelector('.secret-code').addEventListener('click', function() {
+      const range = document.createRange();
+      range.selectNode(this);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+
+      try {
+        document.execCommand('copy');
+        // Visual feedback
+        this.style.background = 'var(--color-success-light)';
+        setTimeout(() => {
+          this.style.background = 'var(--color-white)';
+        }, 200);
+      } catch (err) {
+        console.error('Failed to copy text');
+      }
     });
   </script>
 </body>
