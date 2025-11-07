@@ -296,6 +296,109 @@ app.get('/chat', isAuthenticated, async (req, res) => {
   }
 });
 
+// Chat API endpoint
+app.post('/api/chat', isAuthenticated, async (req, res) => {
+  try {
+    const { message } = req.body;
+    const email = req.session.email;
+
+    // Validate input
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Limit message length
+    if (message.length > 2000) {
+      return res.status(400).json({ error: 'Message is too long (max 2000 characters)' });
+    }
+
+    // Log the incoming message for debugging
+    console.log(`[Chat API] User ${email} sent: ${message.substring(0, 100)}...`);
+
+    // Get user data for context
+    const userResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-users',
+      Key: { email: { S: email } }
+    }));
+
+    const user = unmarshall(userResult.Item);
+    const companionName = user.aiCompanionName || 'Assistant';
+
+    // Generate contextual response based on message content
+    let reply = '';
+
+    // Simple keyword-based responses for now (can be replaced with AI integration later)
+    const messageLower = message.toLowerCase();
+
+    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
+      reply = `Hello ${user.userName || 'there'}! I'm ${companionName}, and I'm here to support you. How are you feeling today?`;
+    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety')) {
+      reply = "I hear that you're feeling anxious. That can be really challenging. Would you like to try a quick breathing exercise together, or would you prefer to talk about what's on your mind?";
+    } else if (messageLower.includes('sad') || messageLower.includes('depressed') || messageLower.includes('down')) {
+      reply = "I'm sorry you're feeling this way. It's okay to have these feelings, and I'm here to listen. Would you like to share what's been weighing on you?";
+    } else if (messageLower.includes('angry') || messageLower.includes('frustrated') || messageLower.includes('mad')) {
+      reply = "I can sense your frustration. It's completely valid to feel angry sometimes. Would you like to talk about what's causing these feelings, or would you prefer some strategies to help manage them?";
+    } else if (messageLower.includes('help')) {
+      reply = `I'm here to help, ${user.userName || 'friend'}. I can listen to your concerns, guide you through breathing exercises, help you reflect on your feelings, or just be here as a supportive presence. What would be most helpful for you right now?`;
+    } else if (messageLower.includes('mindfulness') || messageLower.includes('meditation')) {
+      reply = "Mindfulness is a wonderful practice for managing stress and staying grounded. Would you like me to guide you through a brief mindfulness exercise? We could start with a simple 3-minute breathing meditation.";
+    } else if (messageLower.includes('sleep') || messageLower.includes('insomnia') || messageLower.includes('tired')) {
+      reply = "Sleep difficulties can really impact how we feel. Are you having trouble falling asleep, staying asleep, or both? I can share some sleep hygiene tips that might help.";
+    } else if (messageLower.includes('crisis') || messageLower.includes('suicide') || messageLower.includes('hurt myself')) {
+      reply = "I'm very concerned about what you're sharing. Your life has value, and help is available. Please reach out to the 988 Suicide & Crisis Lifeline right now by calling or texting 988. They have trained counselors available 24/7. You don't have to go through this alone.";
+    } else if (messageLower.includes('thank') || messageLower.includes('thanks')) {
+      reply = `You're very welcome, ${user.userName || 'friend'}. I'm always here when you need someone to talk to. Remember, taking care of your mental health is a sign of strength.`;
+    } else if (messageLower.includes('bye') || messageLower.includes('goodbye')) {
+      reply = `Take care, ${user.userName || 'friend'}. Remember, I'm here whenever you need to talk. Be kind to yourself.`;
+    } else {
+      // Default empathetic responses for general messages
+      const responses = [
+        "I hear you. Tell me more about what you're experiencing.",
+        "Thank you for sharing that with me. How does that make you feel?",
+        "That sounds like it's been weighing on you. I'm here to listen.",
+        "I appreciate you opening up. What would be most helpful for you right now?",
+        "Your feelings are valid. Would you like to explore this further together?",
+        `I understand, ${user.userName || 'friend'}. Sometimes just talking through things can help provide clarity.`,
+        "That's an important insight. How do you think you'd like to move forward with this?",
+        "I'm here with you. Take your time to express whatever you need to."
+      ];
+      reply = responses[Math.floor(Math.random() * responses.length)];
+    }
+
+    // Store chat message in DynamoDB (optional - for chat history)
+    const chatId = `${email}_${Date.now()}`;
+    const chatEntry = {
+      chatId: { S: chatId },
+      email: { S: email },
+      timestamp: { N: Date.now().toString() },
+      userMessage: { S: message },
+      assistantReply: { S: reply },
+      companionName: { S: companionName }
+    };
+
+    // Store chat history (fire and forget - don't wait for response)
+    dynamodb.send(new PutItemCommand({
+      TableName: 'sanctumtools-chats',
+      Item: chatEntry
+    })).catch(error => {
+      console.error('[Chat API] Failed to store chat history:', error);
+      // Don't fail the request if history storage fails
+    });
+
+    // Log the response for debugging
+    console.log(`[Chat API] Responding to ${email}: ${reply.substring(0, 100)}...`);
+
+    // Send response
+    res.json({ reply });
+
+  } catch (error) {
+    console.error('[Chat API] Error:', error);
+    res.status(500).json({
+      error: 'I apologize, but I encountered an issue processing your message. Please try again.'
+    });
+  }
+});
+
 // Logout
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
