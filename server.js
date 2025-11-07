@@ -162,8 +162,8 @@ app.post('/login', async (req, res) => {
   try {
     const { email, code } = req.body;
 
-    if (!email || !code) {
-      return res.render('login', { error: 'Email and code are required' });
+    if (!email) {
+      return res.render('login', { error: 'Email is required' });
     }
 
     // Get user from DynamoDB
@@ -177,10 +177,67 @@ app.post('/login', async (req, res) => {
     }
 
     const user = unmarshall(userResult.Item);
+    const deviceToken = req.cookies.device_token;
 
-    // Verify TOTP code
-    if (!verifyTOTP(user.totpSecret, code)) {
-      return res.render('login', { error: 'Invalid code. Please try again.' });
+    // Check if device is trusted (has valid device token)
+    let isDeviceTrusted = false;
+    if (deviceToken && user.trustedDevices) {
+      const trusted = user.trustedDevices.find(d => d.token === deviceToken);
+      if (trusted && new Date(trusted.lastUsed) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) {
+        isDeviceTrusted = true;
+        // Update last used timestamp
+        await dynamodb.send(new UpdateItemCommand({
+          TableName: 'sanctumtools-users',
+          Key: { email: { S: email } },
+          UpdateExpression: 'SET trustedDevices = list_append(trustedDevices, :empty)',
+          ExpressionAttributeValues: marshall({ ':empty': [] })
+        })).catch(err => console.log('Could not update device timestamp'));
+      }
+    }
+
+    // If device is not trusted, code is required
+    if (!isDeviceTrusted) {
+      if (!code) {
+        return res.render('login', { error: 'Please enter your authentication code. You can find it in your authenticator app.' });
+      }
+
+      // Verify TOTP code
+      if (!verifyTOTP(user.totpSecret, code)) {
+        return res.render('login', { error: 'Invalid code. Please try again.' });
+      }
+
+      // Generate new device token for this device
+      const newToken = crypto.randomBytes(32).toString('hex');
+      const newTrustedDevice = {
+        token: newToken,
+        createdAt: new Date().toISOString(),
+        lastUsed: new Date().toISOString(),
+        userAgent: req.get('user-agent')
+      };
+
+      // Add to trusted devices list
+      const trustedDevices = user.trustedDevices || [];
+      trustedDevices.push(newTrustedDevice);
+
+      // Keep only last 10 devices
+      if (trustedDevices.length > 10) {
+        trustedDevices.shift();
+      }
+
+      await dynamodb.send(new UpdateItemCommand({
+        TableName: 'sanctumtools-users',
+        Key: { email: { S: email } },
+        UpdateExpression: 'SET trustedDevices = :devices',
+        ExpressionAttributeValues: marshall({ ':devices': trustedDevices })
+      }));
+
+      // Set device token cookie (30 day expiry)
+      res.cookie('device_token', newToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        sameSite: 'strict'
+      });
     }
 
     // Set session
