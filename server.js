@@ -3,7 +3,7 @@ const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const path = require('path');
 const crypto = require('crypto');
-const { DynamoDBClient, GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
@@ -80,7 +80,7 @@ app.post('/signup', async (req, res) => {
     }
 
     // Check if user exists
-    const userResult = await dynamodb.send(new GetCommand({
+    const userResult = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
       Key: { email: { S: email } }
     }));
@@ -125,7 +125,7 @@ app.post('/verify-setup', async (req, res) => {
     }
 
     // Create user in DynamoDB
-    await dynamodb.send(new PutCommand({
+    await dynamodb.send(new PutItemCommand({
       TableName: 'sanctumtools-users',
       Item: marshall({
         email: setupEmail,
@@ -167,7 +167,7 @@ app.post('/login', async (req, res) => {
     }
 
     // Get user from DynamoDB
-    const userResult = await dynamodb.send(new GetCommand({
+    const userResult = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
       Key: { email: { S: email } }
     }));
@@ -201,7 +201,7 @@ app.post('/login', async (req, res) => {
 // Onboarding page
 app.get('/onboarding', isAuthenticated, async (req, res) => {
   try {
-    const userResult = await dynamodb.send(new GetCommand({
+    const userResult = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
       Key: { email: { S: req.session.email } }
     }));
@@ -230,7 +230,7 @@ app.post('/complete-onboarding', isAuthenticated, async (req, res) => {
     }
 
     // Update user in DynamoDB
-    await dynamodb.send(new UpdateCommand({
+    await dynamodb.send(new UpdateItemCommand({
       TableName: 'sanctumtools-users',
       Key: { email: { S: email } },
       UpdateExpression: `SET userName = :name, aiCompanionName = :companionName,
@@ -257,7 +257,7 @@ app.post('/complete-onboarding', isAuthenticated, async (req, res) => {
 // Dashboard
 app.get('/dashboard', isAuthenticated, async (req, res) => {
   try {
-    const userResult = await dynamodb.send(new GetCommand({
+    const userResult = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
       Key: { email: { S: req.session.email } }
     }));
@@ -278,7 +278,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
 // Chat page
 app.get('/chat', isAuthenticated, async (req, res) => {
   try {
-    const userResult = await dynamodb.send(new GetCommand({
+    const userResult = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
       Key: { email: { S: req.session.email } }
     }));
