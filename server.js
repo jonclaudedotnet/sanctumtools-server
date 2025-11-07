@@ -429,6 +429,46 @@ app.post('/verify-setup', async (req, res) => {
   }
 });
 
+// Test endpoint - generate fresh TOTP code for testing
+// Usage: GET /test-code?email=test@test.com
+app.get('/test-code', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email parameter required' });
+    }
+
+    // Get user from DynamoDB
+    const userResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-users',
+      Key: { email: { S: email } }
+    }));
+
+    if (!userResult.Item) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = unmarshall(userResult.Item);
+
+    // Generate fresh TOTP code
+    const code = speakeasy.totp({
+      secret: user.totpSecret,
+      encoding: 'base32'
+    });
+
+    res.json({
+      email,
+      code,
+      expiresIn: '30 seconds',
+      instructions: `Use code ${code} to log in. Code expires in ~30 seconds.`
+    });
+  } catch (error) {
+    console.error('Test code generation error:', error);
+    res.status(500).json({ error: 'Failed to generate code' });
+  }
+});
+
 // Login - show form
 app.get('/login', (req, res) => {
   if (req.session.email) {
