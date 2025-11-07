@@ -74,7 +74,7 @@ function detectCrisisKeywords(message) {
     'suicide', 'suicidal', 'kill myself', 'kill my self', 'end my life',
     'want to die', 'better off dead', 'no longer exist', 'not be here',
     'self-harm', 'self harm', 'hurt myself', 'hurt my self',
-    'cut myself', 'cutting', 'overdose', 'od', 'end it all',
+    'cut myself', 'cutting', 'overdose', 'end it all',
     'no point living', 'no reason to live', 'might as well be dead',
     'don\'t want to be alive', 'wish i was dead', 'wish i were dead',
     'take my life', 'taking my life', 'end everything',
@@ -86,6 +86,19 @@ function detectCrisisKeywords(message) {
   // Check for direct crisis keywords
   for (const keyword of directCrisisKeywords) {
     if (messageLower.includes(keyword)) {
+      detectedKeywords.push(keyword);
+    }
+  }
+
+  // Check for word-boundary sensitive keywords (to avoid false positives)
+  const boundaryKeywords = [
+    { pattern: /\bod\b/i, keyword: 'od' },  // overdose abbreviation, but only as a whole word
+    { pattern: /\bods\b/i, keyword: 'ods' },
+    { pattern: /\bo\.?d\.?\b/i, keyword: 'o.d.' }
+  ];
+
+  for (const { pattern, keyword } of boundaryKeywords) {
+    if (pattern.test(message)) {
       detectedKeywords.push(keyword);
     }
   }

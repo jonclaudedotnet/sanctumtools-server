@@ -3,336 +3,467 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Onboarding - SanctumTools</title>
+  <title>Complete Your Profile - SanctumTools</title>
+  <link rel="stylesheet" href="/css/design-system.css">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #F5F1E8 0%, #f0e8dd 100%);
+    .onboarding-container {
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      background: linear-gradient(135deg, var(--color-background) 0%, #f0e8dd 100%);
+      padding: var(--spacing-lg);
     }
 
-    .onboarding-container {
-      background: white;
-      border-radius: 24px;
-      padding: 50px;
-      max-width: 600px;
+    .onboarding-card {
+      background: var(--color-white);
+      border-radius: var(--radius-2xl);
+      padding: var(--spacing-2xl);
+      max-width: 640px;
       width: 100%;
-      box-shadow: 0 8px 32px rgba(153, 50, 168, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 8px 32px rgba(153, 50, 168, 0.15);
     }
 
     .onboarding-header {
       text-align: center;
-      margin-bottom: 35px;
+      margin-bottom: var(--spacing-xl);
     }
 
-    .onboarding-header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #111827;
-      margin-bottom: 8px;
+    .onboarding-title {
+      font-size: var(--font-size-2xl);
+      font-weight: var(--font-weight-bold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--spacing-sm);
     }
 
-    .onboarding-header p {
-      font-size: 16px;
-      color: #6b7280;
+    .onboarding-subtitle {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-base);
+      line-height: var(--line-height-relaxed);
     }
 
-    .progress-section {
-      margin-bottom: 25px;
+    .form-section {
+      margin-bottom: var(--spacing-xl);
+      padding-bottom: var(--spacing-xl);
+      border-bottom: 1px solid var(--color-gray-200);
     }
 
-    .progress-text {
-      font-size: 14px;
-      font-weight: 600;
-      color: #6b7280;
-      margin-bottom: 8px;
+    .form-section:last-of-type {
+      border-bottom: none;
+      margin-bottom: var(--spacing-lg);
     }
 
-    .progress-bar {
-      height: 8px;
-      background: #e5e7eb;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #8b5cf6, #6366f1);
-      transition: width 0.3s ease-in-out;
-    }
-
-    .error-message {
-      background: #fee;
-      border: 1px solid #fcc;
-      color: #c00;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 14px;
-    }
-
-    .form-group {
-      margin-bottom: 24px;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 18px;
-      font-weight: 600;
-      color: #111827;
-      margin-bottom: 8px;
-    }
-
-    .form-group .help-text {
-      font-size: 14px;
-      color: #6b7280;
-      margin-bottom: 12px;
-    }
-
-    textarea {
-      width: 100%;
-      padding: 14px 16px;
-      border: 2px solid #e5e7eb;
-      border-radius: 10px;
-      font-size: 16px;
-      color: #333;
-      background: #ffffff;
-      font-family: inherit;
-      resize: vertical;
-      min-height: 80px;
-      transition: border-color 0.2s;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: #8b5cf6;
-      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-    }
-
-    .form-actions {
+    .section-title {
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--spacing-md);
       display: flex;
-      gap: 12px;
-      margin-top: 30px;
+      align-items: center;
+      gap: var(--spacing-sm);
     }
 
-    button {
-      flex: 1;
-      padding: 14px 24px;
-      font-size: 16px;
-      font-weight: 600;
-      border: none;
-      border-radius: 10px;
+    .section-title svg {
+      width: 20px;
+      height: 20px;
+      color: var(--color-primary);
+    }
+
+    .help-card {
+      background: var(--color-gray-50);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .help-card-title {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .help-card-text {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-relaxed);
+    }
+
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    .radio-option {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      padding: var(--spacing-md);
+      border: 2px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all var(--transition-fast);
     }
 
-    .btn-primary {
-      background: linear-gradient(135deg, #8b5cf6, #6366f1);
-      color: white;
+    .radio-option:hover {
+      border-color: var(--color-primary-light);
+      background: var(--color-gray-50);
     }
 
-    .btn-primary:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    .radio-option input[type="radio"] {
+      position: absolute;
+      opacity: 0;
     }
 
-    .btn-secondary {
-      background: #f3f4f6;
-      color: #374151;
+    .radio-option input[type="radio"]:checked + .radio-content {
+      font-weight: var(--font-weight-medium);
     }
 
-    .btn-secondary:hover:not(:disabled) {
-      background: #e5e7eb;
+    .radio-option input[type="radio"]:checked ~ .radio-indicator {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
     }
 
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    .radio-option input[type="radio"]:checked ~ .radio-indicator::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 8px;
+      height: 8px;
+      background: var(--color-white);
+      border-radius: var(--radius-full);
     }
 
-    .footer {
-      text-align: center;
-      margin-top: 20px;
-      font-size: 13px;
-      color: #6b7280;
+    .radio-indicator {
+      position: relative;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--color-gray-400);
+      border-radius: var(--radius-full);
+      margin-right: var(--spacing-md);
+      flex-shrink: 0;
+      transition: all var(--transition-fast);
+    }
+
+    .radio-content {
+      flex: 1;
+    }
+
+    .radio-label {
+      display: block;
+      color: var(--color-text-primary);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .radio-description {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-muted);
+      line-height: var(--line-height-relaxed);
     }
 
     @media (max-width: 480px) {
-      .onboarding-container {
-        padding: 30px 20px;
+      .onboarding-card {
+        padding: var(--spacing-lg);
       }
 
-      .onboarding-header h1 {
-        font-size: 22px;
-      }
-
-      .form-actions {
-        flex-direction: column;
+      .form-section {
+        padding-bottom: var(--spacing-lg);
+        margin-bottom: var(--spacing-lg);
       }
     }
   </style>
 </head>
 <body>
   <div class="onboarding-container">
-    <div class="onboarding-header">
-      <h1>Welcome to SanctumTools</h1>
-      <p>Let's personalize your experience</p>
-    </div>
-
-    <div class="progress-section">
-      <div class="progress-text" id="progressText">Question 1 of 5</div>
-      <div class="progress-bar">
-        <div class="progress-fill" id="progressFill" style="width: 20%"></div>
+    <div class="onboarding-card animate-fade-in">
+      <!-- Step Progress Indicator -->
+      <div class="step-progress mb-lg">
+        <div class="step-progress-item completed">
+          <div class="step-progress-circle">✓</div>
+          <div class="step-progress-label">Email</div>
+        </div>
+        <div class="step-progress-item completed">
+          <div class="step-progress-circle">✓</div>
+          <div class="step-progress-label">2FA Setup</div>
+        </div>
+        <div class="step-progress-item active">
+          <div class="step-progress-circle">3</div>
+          <div class="step-progress-label">Profile</div>
+        </div>
       </div>
-    </div>
 
-    <% if (error) { %>
-      <div class="error-message"><%= error %></div>
-    <% } %>
-
-    <form id="onboardingForm">
-      <div id="questionsContainer"></div>
-
-      <div class="form-actions">
-        <button type="button" class="btn-secondary" id="backBtn" style="display: none;">Back</button>
-        <button type="submit" class="btn-primary" id="nextBtn">Next</button>
+      <div class="onboarding-header">
+        <h1 class="onboarding-title">Let's Personalize Your Experience</h1>
+        <p class="onboarding-subtitle">This information helps us provide better support tailored to your needs</p>
       </div>
-    </form>
 
-    <div class="footer">
-      🔒 Your data is encrypted and private. Only you can access this information.
+      <% if (error) { %>
+        <div class="alert alert-danger" role="alert">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <%= error %>
+        </div>
+      <% } %>
+
+      <form method="POST" id="onboardingForm">
+        <!-- Basic Information Section -->
+        <div class="form-section">
+          <h2 class="section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Basic Information
+          </h2>
+
+          <div class="input-group">
+            <label for="name" class="input-group-label">Preferred Name</label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              class="form-input"
+              placeholder="How would you like to be called?"
+              aria-label="Preferred name"
+              aria-describedby="name-help"
+            >
+            <span class="form-help" id="name-help">This is how our AI companion will address you</span>
+          </div>
+
+          <div class="input-group">
+            <label for="age" class="input-group-label">Age (Optional)</label>
+            <input
+              type="number"
+              id="age"
+              name="age"
+              class="form-input"
+              min="13"
+              max="120"
+              placeholder="Your age"
+              aria-label="Age"
+              aria-describedby="age-help"
+            >
+            <span class="form-help" id="age-help">Helps us provide age-appropriate resources</span>
+          </div>
+        </div>
+
+        <!-- Mental Health Background Section -->
+        <div class="form-section">
+          <h2 class="section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+            Mental Health Background
+          </h2>
+
+          <div class="help-card">
+            <div class="help-card-title">Why we ask this</div>
+            <div class="help-card-text">
+              Understanding your mental health background helps our AI provide more relevant support and resources. All information is kept strictly confidential.
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="conditions" class="input-group-label">Primary Concerns (Optional)</label>
+            <textarea
+              id="conditions"
+              name="conditions"
+              class="form-textarea"
+              rows="3"
+              placeholder="e.g., anxiety, depression, bipolar disorder, PTSD..."
+              aria-label="Primary mental health concerns"
+              aria-describedby="conditions-help"
+            ></textarea>
+            <span class="form-help" id="conditions-help">Share what you're comfortable with - you can update this anytime</span>
+          </div>
+
+          <div class="input-group">
+            <label class="input-group-label">Are you currently in therapy?</label>
+            <div class="radio-group" role="radiogroup" aria-labelledby="therapy-label">
+              <label class="radio-option">
+                <input type="radio" name="inTherapy" value="yes">
+                <span class="radio-indicator"></span>
+                <div class="radio-content">
+                  <span class="radio-label">Yes, I'm seeing a therapist</span>
+                  <span class="radio-description">We'll complement your professional care</span>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="inTherapy" value="no">
+                <span class="radio-indicator"></span>
+                <div class="radio-content">
+                  <span class="radio-label">No, not currently</span>
+                  <span class="radio-description">We'll provide self-help resources</span>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="inTherapy" value="considering">
+                <span class="radio-indicator"></span>
+                <div class="radio-content">
+                  <span class="radio-label">Considering it</span>
+                  <span class="radio-description">We can help you explore options</span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Emergency Contact Section -->
+        <div class="form-section">
+          <h2 class="section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            Safety Planning
+          </h2>
+
+          <div class="alert alert-info" role="status">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <strong>Optional but recommended</strong>
+              <p class="text-small mt-xs">Adding an emergency contact helps us support you during crisis situations. This person will only be contacted with your consent or in emergency situations.</p>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="emergencyContact" class="input-group-label">Emergency Contact Name</label>
+            <input
+              type="text"
+              id="emergencyContact"
+              name="emergencyContact"
+              class="form-input"
+              placeholder="Trusted friend or family member"
+              aria-label="Emergency contact name"
+            >
+          </div>
+
+          <div class="input-group">
+            <label for="emergencyPhone" class="input-group-label">Emergency Contact Phone</label>
+            <input
+              type="tel"
+              id="emergencyPhone"
+              name="emergencyPhone"
+              class="form-input"
+              placeholder="+1 (555) 123-4567"
+              aria-label="Emergency contact phone"
+            >
+          </div>
+        </div>
+
+        <!-- AI Preferences Section -->
+        <div class="form-section">
+          <h2 class="section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            AI Companion Preferences
+          </h2>
+
+          <div class="input-group">
+            <label class="input-group-label">Communication Style</label>
+            <div class="radio-group" role="radiogroup">
+              <label class="radio-option">
+                <input type="radio" name="aiStyle" value="supportive" checked>
+                <span class="radio-indicator"></span>
+                <div class="radio-content">
+                  <span class="radio-label">Supportive & Empathetic</span>
+                  <span class="radio-description">Warm, understanding, and validating</span>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="aiStyle" value="practical">
+                <span class="radio-indicator"></span>
+                <div class="radio-content">
+                  <span class="radio-label">Practical & Direct</span>
+                  <span class="radio-description">Solution-focused and straightforward</span>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="aiStyle" value="educational">
+                <span class="radio-indicator"></span>
+                <div class="radio-content">
+                  <span class="radio-label">Educational & Informative</span>
+                  <span class="radio-description">Explains concepts and provides resources</span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full btn-lg">
+          <span id="btn-text">Complete Setup</span>
+          <span id="btn-loader" class="loader" style="display: none;"></span>
+        </button>
+
+        <p class="text-center text-muted mt-md">
+          You can update these preferences anytime in your profile settings
+        </p>
+      </form>
     </div>
   </div>
 
   <script>
-    const questions = [
-      {
-        id: 'name',
-        text: "What's your name? (Or what should I call you?)",
-        placeholder: "Type your name here...",
-        help: "This is how your AI companion will address you"
-      },
-      {
-        id: 'companionName',
-        text: "What do you want to name your AI companion?",
-        placeholder: "Give your companion a name...",
-        help: "Choose a name that feels comforting and supportive"
-      },
-      {
-        id: 'diagnosis',
-        text: "What's your primary mental health diagnosis?",
-        placeholder: "E.g., Depression, Anxiety, Bipolar, PTSD, BPD, etc.",
-        help: "This helps personalize your support and tracking"
-      },
-      {
-        id: 'medications',
-        text: "What medications are you currently taking?",
-        placeholder: "List your medications or type 'None'",
-        help: "Include dosages if you'd like (e.g., Zoloft 100mg)"
-      },
-      {
-        id: 'sleepSchedule',
-        text: "What's your typical sleep schedule?",
-        placeholder: "E.g., Wake at 7am, sleep at 11pm",
-        help: "This helps track patterns between sleep and mood"
-      }
-    ];
+    // Add loading state to form submission
+    document.getElementById('onboardingForm').addEventListener('submit', function(e) {
+      const button = this.querySelector('button[type="submit"]');
+      const btnText = document.getElementById('btn-text');
+      const btnLoader = document.getElementById('btn-loader');
 
-    let currentStep = 0;
-    const answers = {};
-
-    function renderQuestion() {
-      const q = questions[currentStep];
-      const container = document.getElementById('questionsContainer');
-
-      container.innerHTML = `
-        <div class="form-group">
-          <label for="answer">${q.text}</label>
-          <div class="help-text">${q.help}</div>
-          <textarea
-            id="answer"
-            name="answer"
-            placeholder="${q.placeholder}"
-            required
-            autofocus
-          >${answers[q.id] || ''}</textarea>
-        </div>
-      `;
-
-      document.getElementById('progressText').textContent = `Question ${currentStep + 1} of ${questions.length}`;
-      const progress = ((currentStep + 1) / questions.length) * 100;
-      document.getElementById('progressFill').style.width = progress + '%';
-
-      const backBtn = document.getElementById('backBtn');
-      const nextBtn = document.getElementById('nextBtn');
-
-      backBtn.style.display = currentStep > 0 ? 'block' : 'none';
-      nextBtn.textContent = currentStep === questions.length - 1 ? 'Complete Setup' : 'Next';
-
-      document.getElementById('answer').focus();
-    }
-
-    document.getElementById('onboardingForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-
-      const answer = document.getElementById('answer').value.trim();
-      if (!answer) return;
-
-      answers[questions[currentStep].id] = answer;
-
-      if (currentStep === questions.length - 1) {
-        submitOnboarding();
-      } else {
-        currentStep++;
-        renderQuestion();
-      }
+      button.disabled = true;
+      btnText.style.display = 'none';
+      btnLoader.style.display = 'inline-block';
     });
 
-    document.getElementById('backBtn').addEventListener('click', () => {
-      if (currentStep > 0) {
-        currentStep--;
-        renderQuestion();
-      }
+    // Auto-save draft
+    let autoSaveTimer;
+    const formInputs = document.querySelectorAll('input, textarea, select');
+
+    formInputs.forEach(input => {
+      input.addEventListener('input', function() {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(() => {
+          // Save to localStorage
+          const formData = {};
+          formInputs.forEach(field => {
+            if (field.type === 'radio') {
+              if (field.checked) formData[field.name] = field.value;
+            } else {
+              formData[field.name] = field.value;
+            }
+          });
+          localStorage.setItem('onboardingDraft', JSON.stringify(formData));
+        }, 1000);
+      });
     });
 
-    async function submitOnboarding() {
-      const nextBtn = document.getElementById('nextBtn');
-      nextBtn.disabled = true;
-      nextBtn.textContent = 'Saving...';
-
-      try {
-        const response = await fetch('/complete-onboarding', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(answers)
+    // Restore draft on load
+    window.addEventListener('load', function() {
+      const draft = localStorage.getItem('onboardingDraft');
+      if (draft) {
+        const formData = JSON.parse(draft);
+        Object.keys(formData).forEach(key => {
+          const field = document.querySelector(`[name="${key}"]`);
+          if (field) {
+            if (field.type === 'radio') {
+              const radio = document.querySelector(`[name="${key}"][value="${formData[key]}"]`);
+              if (radio) radio.checked = true;
+            } else {
+              field.value = formData[key];
+            }
+          }
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to complete onboarding');
-        }
-
-        window.location.href = '/dashboard';
-      } catch (error) {
-        alert('Error: ' + error.message);
-        nextBtn.disabled = false;
-        nextBtn.textContent = 'Try Again';
       }
-    }
+    });
 
-    renderQuestion();
+    // Clear draft on successful submission
+    document.getElementById('onboardingForm').addEventListener('submit', function() {
+      localStorage.removeItem('onboardingDraft');
+    });
   </script>
 </body>
 </html>
