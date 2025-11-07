@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SanctumTools - Mental Health Tracking</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #F5F1E8 0%, #f0e8dd 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .auth-card {
+      background: white;
+      border-radius: 24px;
+      padding: 50px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(153, 50, 168, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #9932a8 0%, #B565C7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      color: #6a6a6a;
+      text-align: center;
+      font-size: 15px;
+      margin-bottom: 35px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      flex-direction: column;
+    }
+
+    .btn {
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #9932a8 0%, #B565C7 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(153, 50, 168, 0.3);
+    }
+
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    @media (max-width: 768px) {
+      .auth-card {
+        padding: 35px 25px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-card">
+    <h1>SanctumTools</h1>
+    <p class="subtitle">Mental health tracking + DIY therapy</p>
+
+    <div class="button-group">
+      <a href="/login" class="btn btn-primary">Login</a>
+      <a href="/signup" class="btn btn-secondary">Create Account</a>
+    </div>
+  </div>
+</body>
+</html>

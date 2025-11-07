@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat - SanctumTools</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #F5F1E8 0%, #f0e8dd 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .navbar {
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .navbar h1 {
+      font-size: 20px;
+      background: linear-gradient(135deg, #9932a8 0%, #B565C7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 20px;
+    }
+
+    .nav-links a {
+      color: #9932a8;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .nav-links a:hover {
+      text-decoration: underline;
+    }
+
+    .chat-container {
+      flex: 1;
+      max-width: 1000px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .messages-area {
+      flex: 1;
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      min-height: 300px;
+    }
+
+    .message {
+      margin-bottom: 16px;
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message.user {
+      text-align: right;
+    }
+
+    .message.assistant {
+      text-align: left;
+    }
+
+    .message-content {
+      display: inline-block;
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      word-wrap: break-word;
+    }
+
+    .message.user .message-content {
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      color: white;
+    }
+
+    .message.assistant .message-content {
+      background: #f3f4f6;
+      color: #111827;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 10px;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    #messageInput {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: inherit;
+    }
+
+    #messageInput:focus {
+      outline: none;
+      border-color: #9932a8;
+      box-shadow: 0 0 0 3px rgba(153, 50, 168, 0.1);
+    }
+
+    #sendBtn {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #sendBtn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    #sendBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .placeholder {
+      text-align: center;
+      color: #9ca3af;
+      padding: 40px 20px;
+      font-size: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .nav-links {
+        gap: 10px;
+      }
+
+      .chat-container {
+        padding: 10px;
+      }
+
+      .message-content {
+        max-width: 90%;
+      }
+
+      .input-area {
+        flex-direction: column;
+      }
+
+      #sendBtn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <h1>SanctumTools</h1>
+    <div class="nav-links">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="chat-container">
+    <h2 style="color: #111827; margin-bottom: 20px;">Chat with <%= companionName %></h2>
+
+    <div class="messages-area" id="messagesArea">
+      <div class="placeholder">
+        👋 Hi, I'm <%= companionName %>! Start by telling me about yourself.
+      </div>
+    </div>
+
+    <div class="input-area">
+      <input
+        type="text"
+        id="messageInput"
+        placeholder="Type your message here..."
+        autocomplete="off"
+      >
+      <button id="sendBtn" type="button">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const messagesArea = document.getElementById('messagesArea');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    let firstMessage = true;
+
+    function addMessage(text, isUser = false) {
+      if (firstMessage) {
+        messagesArea.innerHTML = '';
+        firstMessage = false;
+      }
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message ' + (isUser ? 'user' : 'assistant');
+
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'message-content';
+      contentDiv.textContent = text;
+
+      messageDiv.appendChild(contentDiv);
+      messagesArea.appendChild(messageDiv);
+      messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+
+    sendBtn.addEventListener('click', () => {
+      const message = messageInput.value.trim();
+      if (!message) return;
+
+      addMessage(message, true);
+      messageInput.value = '';
+
+      // Simulate assistant response
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Thinking...';
+
+      setTimeout(() => {
+        addMessage('I understand. This app is still being developed. Chat will be fully functional soon!');
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+        messageInput.focus();
+      }, 500);
+    });
+
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    });
+
+    messageInput.focus();
+  </script>
+</body>
+</html>

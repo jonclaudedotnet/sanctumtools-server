@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onboarding - SanctumTools</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #F5F1E8 0%, #f0e8dd 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .onboarding-container {
+      background: white;
+      border-radius: 24px;
+      padding: 50px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(153, 50, 168, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+    }
+
+    .onboarding-header {
+      text-align: center;
+      margin-bottom: 35px;
+    }
+
+    .onboarding-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+
+    .onboarding-header p {
+      font-size: 16px;
+      color: #6b7280;
+    }
+
+    .progress-section {
+      margin-bottom: 25px;
+    }
+
+    .progress-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #8b5cf6, #6366f1);
+      transition: width 0.3s ease-in-out;
+    }
+
+    .error-message {
+      background: #fee;
+      border: 1px solid #fcc;
+      color: #c00;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 18px;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+
+    .form-group .help-text {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 16px;
+      color: #333;
+      background: #ffffff;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 80px;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    button {
+      flex: 1;
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #e5e7eb;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    @media (max-width: 480px) {
+      .onboarding-container {
+        padding: 30px 20px;
+      }
+
+      .onboarding-header h1 {
+        font-size: 22px;
+      }
+
+      .form-actions {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="onboarding-container">
+    <div class="onboarding-header">
+      <h1>Welcome to SanctumTools</h1>
+      <p>Let's personalize your experience</p>
+    </div>
+
+    <div class="progress-section">
+      <div class="progress-text" id="progressText">Question 1 of 5</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 20%"></div>
+      </div>
+    </div>
+
+    <% if (error) { %>
+      <div class="error-message"><%= error %></div>
+    <% } %>
+
+    <form id="onboardingForm">
+      <div id="questionsContainer"></div>
+
+      <div class="form-actions">
+        <button type="button" class="btn-secondary" id="backBtn" style="display: none;">Back</button>
+        <button type="submit" class="btn-primary" id="nextBtn">Next</button>
+      </div>
+    </form>
+
+    <div class="footer">
+      🔒 Your data is encrypted and private. Only you can access this information.
+    </div>
+  </div>
+
+  <script>
+    const questions = [
+      {
+        id: 'name',
+        text: "What's your name? (Or what should I call you?)",
+        placeholder: "Type your name here...",
+        help: "This is how your AI companion will address you"
+      },
+      {
+        id: 'companionName',
+        text: "What do you want to name your AI companion?",
+        placeholder: "Give your companion a name...",
+        help: "Choose a name that feels comforting and supportive"
+      },
+      {
+        id: 'diagnosis',
+        text: "What's your primary mental health diagnosis?",
+        placeholder: "E.g., Depression, Anxiety, Bipolar, PTSD, BPD, etc.",
+        help: "This helps personalize your support and tracking"
+      },
+      {
+        id: 'medications',
+        text: "What medications are you currently taking?",
+        placeholder: "List your medications or type 'None'",
+        help: "Include dosages if you'd like (e.g., Zoloft 100mg)"
+      },
+      {
+        id: 'sleepSchedule',
+        text: "What's your typical sleep schedule?",
+        placeholder: "E.g., Wake at 7am, sleep at 11pm",
+        help: "This helps track patterns between sleep and mood"
+      }
+    ];
+
+    let currentStep = 0;
+    const answers = {};
+
+    function renderQuestion() {
+      const q = questions[currentStep];
+      const container = document.getElementById('questionsContainer');
+
+      container.innerHTML = `
+        <div class="form-group">
+          <label for="answer">${q.text}</label>
+          <div class="help-text">${q.help}</div>
+          <textarea
+            id="answer"
+            name="answer"
+            placeholder="${q.placeholder}"
+            required
+            autofocus
+          >${answers[q.id] || ''}</textarea>
+        </div>
+      `;
+
+      document.getElementById('progressText').textContent = `Question ${currentStep + 1} of ${questions.length}`;
+      const progress = ((currentStep + 1) / questions.length) * 100;
+      document.getElementById('progressFill').style.width = progress + '%';
+
+      const backBtn = document.getElementById('backBtn');
+      const nextBtn = document.getElementById('nextBtn');
+
+      backBtn.style.display = currentStep > 0 ? 'block' : 'none';
+      nextBtn.textContent = currentStep === questions.length - 1 ? 'Complete Setup' : 'Next';
+
+      document.getElementById('answer').focus();
+    }
+
+    document.getElementById('onboardingForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const answer = document.getElementById('answer').value.trim();
+      if (!answer) return;
+
+      answers[questions[currentStep].id] = answer;
+
+      if (currentStep === questions.length - 1) {
+        submitOnboarding();
+      } else {
+        currentStep++;
+        renderQuestion();
+      }
+    });
+
+    document.getElementById('backBtn').addEventListener('click', () => {
+      if (currentStep > 0) {
+        currentStep--;
+        renderQuestion();
+      }
+    });
+
+    async function submitOnboarding() {
+      const nextBtn = document.getElementById('nextBtn');
+      nextBtn.disabled = true;
+      nextBtn.textContent = 'Saving...';
+
+      try {
+        const response = await fetch('/complete-onboarding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(answers)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to complete onboarding');
+        }
+
+        window.location.href = '/dashboard';
+      } catch (error) {
+        alert('Error: ' + error.message);
+        nextBtn.disabled = false;
+        nextBtn.textContent = 'Try Again';
+      }
+    }
+
+    renderQuestion();
+  </script>
+</body>
+</html>
