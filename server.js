@@ -559,6 +559,66 @@ function detectFrameworkForDiagnosis(diagnosis) {
   return 'integrative';
 }
 
+// Helper function to generate therapeutic responses based on framework
+function generateTherapeuticResponse(message, framework, user, companionName) {
+  const messageLower = message.toLowerCase();
+  let reply = '';
+
+  if (framework === 'dbt') {
+    // DBT Framework - Conversational teaching approach
+    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
+      reply = `Hello ${user.userName}! I'm ${companionName}. On a scale of 0-10, how intense are your emotions right now? This helps me know whether to focus on distress tolerance or emotion regulation.`;
+    } else if (messageLower.includes('empty') || messageLower.includes('numb') || messageLower.includes('void')) {
+      reply = "That feeling of emptiness is really difficult. Can you describe one physical sensation you're noticing? Even numbness has a physical quality - let's start there.";
+    } else if (messageLower.includes('overwhelm') || messageLower.includes('too much') || messageLower.includes("can't handle")) {
+      reply = "You're overwhelmed. Use STOP: Stop, Take a step back, Observe, Proceed mindfully. Can you freeze for 60 seconds before acting on any urges?";
+    } else if (messageLower.includes('angry') || messageLower.includes('rage') || messageLower.includes('furious')) {
+      reply = "I hear intense anger. Rate it 0-10? If above 7, try TIPP - splash cold water on your face. If below 7, let's Check the Facts - what actually happened?";
+    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety') || messageLower.includes('panic')) {
+      reply = "Anxiety is overwhelming. Let's use TIPP - can you get ice on your face? This triggers your dive reflex and brings arousal down quickly.";
+    } else if (messageLower.includes('urge') || messageLower.includes('impulse')) {
+      reply = "You're having an urge. Let's use Opposite Action - if the urge says attack, practice kindness. What's opposite to your current urge?";
+    } else if (messageLower.includes('sad') || messageLower.includes('depressed')) {
+      reply = "I hear sadness. Are you in Emotion Mind? Let's find Wise Mind - take three breaths and ask what someone wise would say about this.";
+    } else {
+      reply = "I hear you. Are you in Emotion Mind, Reasonable Mind, or Wise Mind? This helps me know which DBT skill would help most.";
+    }
+  } else if (framework === 'cbt') {
+    // CBT Framework - Conversational thought challenging
+    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
+      reply = `Hello ${user.userName}! I'm ${companionName}. What thoughts have been on your mind? I can help you examine them for patterns.`;
+    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety') || messageLower.includes('worried')) {
+      reply = "Anxiety often comes from 'what if' thoughts. What specific thought is making you anxious? Let's check if it's realistic or catastrophizing.";
+    } else if (messageLower.includes('failure') || messageLower.includes('worthless') || messageLower.includes('stupid')) {
+      reply = "That's harsh self-labeling. What evidence supports that thought? What evidence contradicts it? Let's look at both sides.";
+    } else if (messageLower.includes('always') || messageLower.includes('never') || messageLower.includes('everyone')) {
+      reply = "I notice absolute thinking. Can you think of one exception? One time this wasn't true? That proves it's not absolute.";
+    } else if (messageLower.includes('should') || messageLower.includes('must')) {
+      reply = "Those 'should' statements add pressure. What if we changed 'I should' to 'I'd prefer to'? Notice how that feels different?";
+    } else if (messageLower.includes('sad') || messageLower.includes('depressed')) {
+      reply = "What automatic thought came up? Is it a fact or interpretation? Let's examine if there's a more balanced view.";
+    } else {
+      reply = "What thought popped into your head about this? Once we identify it, we can check if it's helpful or needs reframing.";
+    }
+  } else {
+    // Integrative approach
+    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
+      reply = `Hello ${user.userName}! I'm ${companionName}. How are you feeling right now?`;
+    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety')) {
+      reply = "Let's ground you. Name 5 things you see, 4 you touch, 3 you hear, 2 you smell, 1 you taste. This brings you to the present.";
+    } else if (messageLower.includes('sad') || messageLower.includes('depressed')) {
+      reply = "That heaviness is real. What's one tiny thing you could do - not because you should, but to see if it shifts even 1%?";
+    } else if (messageLower.includes('angry')) {
+      reply = "Anger signals a boundary crossed or need unmet. What boundary or need is involved? Understanding helps us respond wisely.";
+    } else {
+      reply = "I hear you. What would help most - exploring these feelings, learning a coping skill, or just having someone listen?";
+    }
+  }
+
+  // Keep responses conversational and under 2-3 sentences
+  return reply || `I hear what you're sharing. Tell me more about what you're experiencing right now.`;
+}
+
 // Note: Comprehensive crisis detection functions are defined earlier in the file
 // They include detectCrisisKeywords(), logCrisisEvent(), getCrisisResponse() etc.
 
@@ -737,57 +797,8 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
     // Detect therapeutic framework based on diagnosis
     const framework = detectFrameworkForDiagnosis(user.primaryDiagnosis);
 
-    // Generate contextual response based on message content
-    let reply = '';
-
-    // Simple keyword-based responses for now (can be replaced with AI integration later)
-    const messageLower = message.toLowerCase();
-
-    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
-      reply = `Hello ${user.userName || 'there'}! I'm ${companionName}, and I'm here to support you. How are you feeling today?`;
-    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety')) {
-      if (framework === 'dbt') {
-        reply = "I hear that you're feeling anxious. Let's try the TIPP skill - Temperature, Intense exercise, Paced breathing, or Paired muscle relaxation. Would you like me to guide you through one of these?";
-      } else {
-        reply = "I hear that you're feeling anxious. That can be really challenging. Would you like to try a quick breathing exercise together, or would you prefer to talk about what's on your mind?";
-      }
-    } else if (messageLower.includes('sad') || messageLower.includes('depressed') || messageLower.includes('down')) {
-      // Be careful not to trigger crisis response for normal sadness
-      if (framework === 'cbt') {
-        reply = "I'm sorry you're feeling down. Sometimes our thoughts can intensify these feelings. Would you like to explore what thoughts are contributing to this sadness?";
-      } else {
-        reply = "I'm sorry you're feeling this way. It's okay to have these feelings, and I'm here to listen. Would you like to share what's been weighing on you?";
-      }
-    } else if (messageLower.includes('angry') || messageLower.includes('frustrated') || messageLower.includes('mad')) {
-      if (framework === 'dbt') {
-        reply = "I can sense your frustration. The Opposite Action skill might help here - when anger isn't justified, we can choose to act opposite to the urge. Would you like to work through this together?";
-      } else {
-        reply = "I can sense your frustration. It's completely valid to feel angry sometimes. Would you like to talk about what's causing these feelings, or would you prefer some strategies to help manage them?";
-      }
-    } else if (messageLower.includes('help')) {
-      reply = `I'm here to help, ${user.userName || 'friend'}. Based on your ${user.primaryDiagnosis || 'needs'}, I can offer ${framework.toUpperCase()} skills, listen to your concerns, or just be here as a supportive presence. What would be most helpful right now?`;
-    } else if (messageLower.includes('mindfulness') || messageLower.includes('meditation')) {
-      reply = "Mindfulness is a wonderful practice for managing stress and staying grounded. Would you like me to guide you through a brief mindfulness exercise? We could start with a simple 3-minute breathing meditation.";
-    } else if (messageLower.includes('sleep') || messageLower.includes('insomnia') || messageLower.includes('tired')) {
-      reply = "Sleep difficulties can really impact how we feel. Are you having trouble falling asleep, staying asleep, or both? I can share some sleep hygiene tips that might help.";
-    } else if (messageLower.includes('thank') || messageLower.includes('thanks')) {
-      reply = `You're very welcome, ${user.userName || 'friend'}. I'm always here when you need someone to talk to. Remember, taking care of your mental health is a sign of strength.`;
-    } else if (messageLower.includes('bye') || messageLower.includes('goodbye')) {
-      reply = `Take care, ${user.userName || 'friend'}. Remember, I'm here whenever you need to talk. Be kind to yourself.`;
-    } else {
-      // Default empathetic responses for general messages
-      const responses = [
-        "I hear you. Tell me more about what you're experiencing.",
-        "Thank you for sharing that with me. How does that make you feel?",
-        "That sounds like it's been weighing on you. I'm here to listen.",
-        "I appreciate you opening up. What would be most helpful for you right now?",
-        "Your feelings are valid. Would you like to explore this further together?",
-        `I understand, ${user.userName || 'friend'}. Sometimes just talking through things can help provide clarity.`,
-        "That's an important insight. How do you think you'd like to move forward with this?",
-        "I'm here with you. Take your time to express whatever you need to."
-      ];
-      reply = responses[Math.floor(Math.random() * responses.length)];
-    }
+    // Generate therapeutic response based on framework
+    const reply = generateTherapeuticResponse(message, framework, user, companionName);
 
     // Store chat message in DynamoDB
     const chatId = `${email}_${Date.now()}`;
