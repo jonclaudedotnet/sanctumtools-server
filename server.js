@@ -7,13 +7,9 @@ const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand } = re
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
-const Anthropic = require('@anthropic-ai/sdk');
 
 const app = express();
 const dynamodb = new DynamoDBClient({ region: 'us-east-1' });
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY
-});
 
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-in-production';
@@ -166,8 +162,8 @@ app.post('/login', async (req, res) => {
   try {
     const { email, code } = req.body;
 
-    if (!email) {
-      return res.render('login', { error: 'Email is required' });
+    if (!email || !code) {
+      return res.render('login', { error: 'Email and code are required' });
     }
 
     // Get user from DynamoDB
@@ -181,67 +177,10 @@ app.post('/login', async (req, res) => {
     }
 
     const user = unmarshall(userResult.Item);
-    const deviceToken = req.cookies.device_token;
 
-    // Check if device is trusted (has valid device token)
-    let isDeviceTrusted = false;
-    if (deviceToken && user.trustedDevices) {
-      const trusted = user.trustedDevices.find(d => d.token === deviceToken);
-      if (trusted && new Date(trusted.lastUsed) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) {
-        isDeviceTrusted = true;
-        // Update last used timestamp
-        await dynamodb.send(new UpdateItemCommand({
-          TableName: 'sanctumtools-users',
-          Key: { email: { S: email } },
-          UpdateExpression: 'SET trustedDevices = list_append(trustedDevices, :empty)',
-          ExpressionAttributeValues: marshall({ ':empty': [] })
-        })).catch(err => console.log('Could not update device timestamp'));
-      }
-    }
-
-    // If device is not trusted, code is required
-    if (!isDeviceTrusted) {
-      if (!code) {
-        return res.render('login', { error: 'Please enter your authentication code. You can find it in your authenticator app.' });
-      }
-
-      // Verify TOTP code
-      if (!verifyTOTP(user.totpSecret, code)) {
-        return res.render('login', { error: 'Invalid code. Please try again.' });
-      }
-
-      // Generate new device token for this device
-      const newToken = crypto.randomBytes(32).toString('hex');
-      const newTrustedDevice = {
-        token: newToken,
-        createdAt: new Date().toISOString(),
-        lastUsed: new Date().toISOString(),
-        userAgent: req.get('user-agent')
-      };
-
-      // Add to trusted devices list
-      const trustedDevices = user.trustedDevices || [];
-      trustedDevices.push(newTrustedDevice);
-
-      // Keep only last 10 devices
-      if (trustedDevices.length > 10) {
-        trustedDevices.shift();
-      }
-
-      await dynamodb.send(new UpdateItemCommand({
-        TableName: 'sanctumtools-users',
-        Key: { email: { S: email } },
-        UpdateExpression: 'SET trustedDevices = :devices',
-        ExpressionAttributeValues: marshall({ ':devices': trustedDevices })
-      }));
-
-      // Set device token cookie (30 day expiry)
-      res.cookie('device_token', newToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-        sameSite: 'strict'
-      });
+    // Verify TOTP code
+    if (!verifyTOTP(user.totpSecret, code)) {
+      return res.render('login', { error: 'Invalid code. Please try again.' });
     }
 
     // Set session
@@ -357,7 +296,7 @@ app.get('/chat', isAuthenticated, async (req, res) => {
   }
 });
 
-// Chat API endpoint with Claude Sonnet 4.5
+// Chat API endpoint
 app.post('/api/chat', isAuthenticated, async (req, res) => {
   try {
     const { message } = req.body;
@@ -384,41 +323,47 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
 
     const user = unmarshall(userResult.Item);
     const companionName = user.aiCompanionName || 'Assistant';
-    const userName = user.userName || 'friend';
-    const diagnosis = user.primaryDiagnosis || 'unspecified mental health concerns';
-    const medications = user.currentMedications || [];
 
-    // Build system prompt with user context
-    const systemPrompt = `You are ${companionName}, a compassionate mental health support companion. You are speaking with ${userName} who has shared the following information with you:
-- Primary Diagnosis: ${diagnosis}
-- Current Medications: ${medications.length > 0 ? medications.join(', ') : 'None specified'}
+    // Generate contextual response based on message content
+    let reply = '';
 
-Your role is to:
-1. Listen with empathy and validate their feelings
-2. Provide supportive, non-judgmental responses
-3. Help them reflect on their emotions and experiences
-4. Offer gentle coping strategies when appropriate
-5. IMPORTANT: If they mention crisis, suicidal thoughts, or self-harm, respond with care and direct them to 988 Suicide & Crisis Lifeline
-6. Keep responses conversational and warm (not clinical)
-7. Ask follow-up questions to understand them better
-8. Never provide medical advice - encourage professional help when needed
+    // Simple keyword-based responses for now (can be replaced with AI integration later)
+    const messageLower = message.toLowerCase();
 
-Be genuine, caring, and present. You are here to support ${userName} through their mental health journey.`;
-
-    // Call Claude Sonnet 4.5
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 500,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: message
-        }
-      ]
-    });
-
-    const reply = response.content[0].type === 'text' ? response.content[0].text : 'I apologize, but I was unable to generate a response.';
+    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
+      reply = `Hello ${user.userName || 'there'}! I'm ${companionName}, and I'm here to support you. How are you feeling today?`;
+    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety')) {
+      reply = "I hear that you're feeling anxious. That can be really challenging. Would you like to try a quick breathing exercise together, or would you prefer to talk about what's on your mind?";
+    } else if (messageLower.includes('sad') || messageLower.includes('depressed') || messageLower.includes('down')) {
+      reply = "I'm sorry you're feeling this way. It's okay to have these feelings, and I'm here to listen. Would you like to share what's been weighing on you?";
+    } else if (messageLower.includes('angry') || messageLower.includes('frustrated') || messageLower.includes('mad')) {
+      reply = "I can sense your frustration. It's completely valid to feel angry sometimes. Would you like to talk about what's causing these feelings, or would you prefer some strategies to help manage them?";
+    } else if (messageLower.includes('help')) {
+      reply = `I'm here to help, ${user.userName || 'friend'}. I can listen to your concerns, guide you through breathing exercises, help you reflect on your feelings, or just be here as a supportive presence. What would be most helpful for you right now?`;
+    } else if (messageLower.includes('mindfulness') || messageLower.includes('meditation')) {
+      reply = "Mindfulness is a wonderful practice for managing stress and staying grounded. Would you like me to guide you through a brief mindfulness exercise? We could start with a simple 3-minute breathing meditation.";
+    } else if (messageLower.includes('sleep') || messageLower.includes('insomnia') || messageLower.includes('tired')) {
+      reply = "Sleep difficulties can really impact how we feel. Are you having trouble falling asleep, staying asleep, or both? I can share some sleep hygiene tips that might help.";
+    } else if (messageLower.includes('crisis') || messageLower.includes('suicide') || messageLower.includes('hurt myself')) {
+      reply = "I'm very concerned about what you're sharing. Your life has value, and help is available. Please reach out to the 988 Suicide & Crisis Lifeline right now by calling or texting 988. They have trained counselors available 24/7. You don't have to go through this alone.";
+    } else if (messageLower.includes('thank') || messageLower.includes('thanks')) {
+      reply = `You're very welcome, ${user.userName || 'friend'}. I'm always here when you need someone to talk to. Remember, taking care of your mental health is a sign of strength.`;
+    } else if (messageLower.includes('bye') || messageLower.includes('goodbye')) {
+      reply = `Take care, ${user.userName || 'friend'}. Remember, I'm here whenever you need to talk. Be kind to yourself.`;
+    } else {
+      // Default empathetic responses for general messages
+      const responses = [
+        "I hear you. Tell me more about what you're experiencing.",
+        "Thank you for sharing that with me. How does that make you feel?",
+        "That sounds like it's been weighing on you. I'm here to listen.",
+        "I appreciate you opening up. What would be most helpful for you right now?",
+        "Your feelings are valid. Would you like to explore this further together?",
+        `I understand, ${user.userName || 'friend'}. Sometimes just talking through things can help provide clarity.`,
+        "That's an important insight. How do you think you'd like to move forward with this?",
+        "I'm here with you. Take your time to express whatever you need to."
+      ];
+      reply = responses[Math.floor(Math.random() * responses.length)];
+    }
 
     // Store chat message in DynamoDB (optional - for chat history)
     const chatId = `${email}_${Date.now()}`;
