@@ -8,9 +8,13 @@ const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, Creat
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
+const Anthropic = require('@anthropic-ai/sdk');
 
 const app = express();
 const dynamodb = new DynamoDBClient({ region: 'us-east-1' });
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
 
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-in-production';
@@ -630,64 +634,75 @@ function detectFrameworkForDiagnosis(diagnosis) {
   return 'integrative';
 }
 
-// Helper function to generate therapeutic responses based on framework
-function generateTherapeuticResponse(message, framework, user, companionName) {
-  const messageLower = message.toLowerCase();
-  let reply = '';
+// Helper function to generate therapeutic responses using Claude API
+async function generateTherapeuticResponseWithClaude(message, framework, user, companionName) {
+  try {
+    // Build system prompt based on therapeutic framework
+    let systemPrompt = '';
 
-  if (framework === 'dbt') {
-    // DBT Framework - Conversational teaching approach
-    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
-      reply = `Hello ${user.userName}! I'm ${companionName}. On a scale of 0-10, how intense are your emotions right now? This helps me know whether to focus on distress tolerance or emotion regulation.`;
-    } else if (messageLower.includes('empty') || messageLower.includes('numb') || messageLower.includes('void')) {
-      reply = "That feeling of emptiness is really difficult. Can you describe one physical sensation you're noticing? Even numbness has a physical quality - let's start there.";
-    } else if (messageLower.includes('overwhelm') || messageLower.includes('too much') || messageLower.includes("can't handle")) {
-      reply = "You're overwhelmed. Use STOP: Stop, Take a step back, Observe, Proceed mindfully. Can you freeze for 60 seconds before acting on any urges?";
-    } else if (messageLower.includes('angry') || messageLower.includes('rage') || messageLower.includes('furious')) {
-      reply = "I hear intense anger. Rate it 0-10? If above 7, try TIPP - splash cold water on your face. If below 7, let's Check the Facts - what actually happened?";
-    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety') || messageLower.includes('panic')) {
-      reply = "Anxiety is overwhelming. Let's use TIPP - can you get ice on your face? This triggers your dive reflex and brings arousal down quickly.";
-    } else if (messageLower.includes('urge') || messageLower.includes('impulse')) {
-      reply = "You're having an urge. Let's use Opposite Action - if the urge says attack, practice kindness. What's opposite to your current urge?";
-    } else if (messageLower.includes('sad') || messageLower.includes('depressed')) {
-      reply = "I hear sadness. Are you in Emotion Mind? Let's find Wise Mind - take three breaths and ask what someone wise would say about this.";
+    if (framework === 'dbt') {
+      systemPrompt = `You are ${companionName}, an AI companion trained in Dialectical Behavior Therapy (DBT). You're supporting ${user.userName}, who has been diagnosed with ${user.primaryDiagnosis || 'mental health challenges'}.
+
+Your approach:
+- Use DBT skills: mindfulness, distress tolerance, emotion regulation, interpersonal effectiveness
+- Teach skills conversationally (STOP, TIPP, Wise Mind, Opposite Action, Check the Facts)
+- Ask about emotion intensity (0-10 scale) to guide skill selection
+- Be warm, validating, and direct
+- Keep responses brief (2-3 sentences max)
+- Never diagnose, prescribe medication, or replace professional care
+
+Respond to the user's message with a therapeutic DBT approach.`;
+    } else if (framework === 'cbt') {
+      systemPrompt = `You are ${companionName}, an AI companion trained in Cognitive Behavioral Therapy (CBT). You're supporting ${user.userName}, who has been diagnosed with ${user.primaryDiagnosis || 'mental health challenges'}.
+
+Your approach:
+- Identify and challenge cognitive distortions (catastrophizing, black-and-white thinking, should statements)
+- Use Socratic questioning to examine thoughts
+- Help reframe unhelpful thoughts into balanced perspectives
+- Focus on the connection between thoughts, feelings, and behaviors
+- Be warm, collaborative, and curious
+- Keep responses brief (2-3 sentences max)
+- Never diagnose, prescribe medication, or replace professional care
+
+Respond to the user's message with a therapeutic CBT approach.`;
     } else {
-      reply = "I hear you. Are you in Emotion Mind, Reasonable Mind, or Wise Mind? This helps me know which DBT skill would help most.";
+      systemPrompt = `You are ${companionName}, an AI companion using an integrative therapeutic approach. You're supporting ${user.userName}, who has been diagnosed with ${user.primaryDiagnosis || 'mental health challenges'}.
+
+Your approach:
+- Blend techniques from CBT, DBT, and mindfulness-based approaches
+- Validate emotions while offering coping strategies
+- Use grounding techniques when appropriate
+- Ask clarifying questions to understand needs
+- Be warm, empathetic, and supportive
+- Keep responses brief (2-3 sentences max)
+- Never diagnose, prescribe medication, or replace professional care
+
+Respond to the user's message with a therapeutic integrative approach.`;
     }
-  } else if (framework === 'cbt') {
-    // CBT Framework - Conversational thought challenging
-    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
-      reply = `Hello ${user.userName}! I'm ${companionName}. What thoughts have been on your mind? I can help you examine them for patterns.`;
-    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety') || messageLower.includes('worried')) {
-      reply = "Anxiety often comes from 'what if' thoughts. What specific thought is making you anxious? Let's check if it's realistic or catastrophizing.";
-    } else if (messageLower.includes('failure') || messageLower.includes('worthless') || messageLower.includes('stupid')) {
-      reply = "That's harsh self-labeling. What evidence supports that thought? What evidence contradicts it? Let's look at both sides.";
-    } else if (messageLower.includes('always') || messageLower.includes('never') || messageLower.includes('everyone')) {
-      reply = "I notice absolute thinking. Can you think of one exception? One time this wasn't true? That proves it's not absolute.";
-    } else if (messageLower.includes('should') || messageLower.includes('must')) {
-      reply = "Those 'should' statements add pressure. What if we changed 'I should' to 'I'd prefer to'? Notice how that feels different?";
-    } else if (messageLower.includes('sad') || messageLower.includes('depressed')) {
-      reply = "What automatic thought came up? Is it a fact or interpretation? Let's examine if there's a more balanced view.";
-    } else {
-      reply = "What thought popped into your head about this? Once we identify it, we can check if it's helpful or needs reframing.";
-    }
-  } else {
-    // Integrative approach
-    if (messageLower.includes('hello') || messageLower.includes('hi') || messageLower.includes('hey')) {
-      reply = `Hello ${user.userName}! I'm ${companionName}. How are you feeling right now?`;
-    } else if (messageLower.includes('anxious') || messageLower.includes('anxiety')) {
-      reply = "Let's ground you. Name 5 things you see, 4 you touch, 3 you hear, 2 you smell, 1 you taste. This brings you to the present.";
-    } else if (messageLower.includes('sad') || messageLower.includes('depressed')) {
-      reply = "That heaviness is real. What's one tiny thing you could do - not because you should, but to see if it shifts even 1%?";
-    } else if (messageLower.includes('angry')) {
-      reply = "Anger signals a boundary crossed or need unmet. What boundary or need is involved? Understanding helps us respond wisely.";
-    } else {
-      reply = "I hear you. What would help most - exploring these feelings, learning a coping skill, or just having someone listen?";
-    }
+
+    // Call Claude API
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: message
+        }
+      ]
+    });
+
+    // Extract the text response
+    const reply = response.content[0].text;
+    return reply;
+
+  } catch (error) {
+    console.error('[Claude API] Error generating therapeutic response:', error);
+
+    // Fallback response if Claude API fails
+    return `I'm here to support you, ${user.userName}. I'm having a brief technical issue, but I want you to know I'm listening. Can you tell me more about what you're experiencing right now?`;
   }
-
-  // Keep responses conversational and under 2-3 sentences
-  return reply || `I hear what you're sharing. Tell me more about what you're experiencing right now.`;
 }
 
 // Note: Comprehensive crisis detection functions are defined earlier in the file
@@ -868,8 +883,8 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
     // Detect therapeutic framework based on diagnosis
     const framework = detectFrameworkForDiagnosis(user.primaryDiagnosis);
 
-    // Generate therapeutic response based on framework
-    const reply = generateTherapeuticResponse(message, framework, user, companionName);
+    // Generate therapeutic response based on framework using Claude API
+    const reply = await generateTherapeuticResponseWithClaude(message, framework, user, companionName);
 
     // Store chat message in DynamoDB
     const chatId = `${email}_${Date.now()}`;
