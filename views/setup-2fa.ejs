@@ -169,7 +169,7 @@
       <code style="font-family: monospace;"><%= secret %></code>
     </div>
 
-    <% if (error) { %>
+    <% if (typeof error !== 'undefined' && error) { %>
       <div class="error-message"><%= error %></div>
     <% } %>
 
