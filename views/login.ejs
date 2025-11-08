@@ -55,13 +55,6 @@
       font-size: var(--font-size-base);
     }
 
-    .auth-divider {
-      text-align: center;
-      margin: var(--spacing-lg) 0;
-      color: var(--color-text-muted);
-      font-size: var(--font-size-sm);
-    }
-
     .auth-footer {
       text-align: center;
       margin-top: var(--spacing-xl);
@@ -124,40 +117,36 @@
 
       <form method="POST" id="loginForm">
         <div class="input-group">
-          <label for="email" class="input-group-label required">Email Address</label>
+          <label for="username" class="input-group-label required">Username</label>
           <input
-            type="email"
-            id="email"
-            name="email"
+            type="text"
+            id="username"
+            name="username"
             class="form-input"
-            placeholder="your@email.com"
+            placeholder="your-username"
             required
             autofocus
-            autocomplete="email"
-            aria-label="Email address"
+            autocomplete="username"
+            aria-label="Username"
             aria-required="true"
           >
-          <span class="form-help">Enter the email address associated with your account</span>
+          <span class="form-help">Enter your username or email address</span>
         </div>
 
         <div class="input-group">
-          <label for="code" class="input-group-label required">Two-Factor Code</label>
+          <label for="password" class="input-group-label required">Password</label>
           <input
-            type="text"
-            id="code"
-            name="code"
+            type="password"
+            id="password"
+            name="password"
             class="form-input"
-            placeholder="000000"
-            maxlength="6"
-            pattern="\d{6}"
+            placeholder="••••••••"
             required
-            autocomplete="one-time-code"
-            inputmode="numeric"
-            aria-label="Six digit authentication code"
+            autocomplete="current-password"
+            aria-label="Password"
             aria-required="true"
-            aria-describedby="code-help"
           >
-          <span class="form-help" id="code-help">Enter the 6-digit code from your authenticator app</span>
+          <span class="form-help">Enter your password</span>
         </div>
 
         <button type="submit" class="btn btn-primary btn-full btn-lg">
@@ -183,16 +172,6 @@
       button.disabled = true;
       btnText.style.display = 'none';
       btnLoader.style.display = 'inline-block';
-    });
-
-    // Auto-focus on code field if email is filled
-    window.addEventListener('load', function() {
-      const emailField = document.getElementById('email');
-      const codeField = document.getElementById('code');
-
-      if (emailField.value) {
-        codeField.focus();
-      }
     });
   </script>
 </body>

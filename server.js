@@ -8,6 +8,7 @@ const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, Creat
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
+const bcrypt = require('bcrypt');
 const Anthropic = require('@anthropic-ai/sdk');
 
 const app = express();
@@ -486,34 +487,37 @@ app.get('/login', (req, res) => {
   res.render('login', { error: null });
 });
 
-// Login - handle form submission
+// Login - handle form submission (username/password)
 app.post('/login', async (req, res) => {
   try {
-    const { email, code } = req.body;
+    const { username, password } = req.body;
 
-    if (!email || !code) {
-      return res.render('login', { error: 'Email and code are required' });
+    if (!username || !password) {
+      return res.render('login', { error: 'Username and password are required' });
     }
 
-    // Get user from DynamoDB
+    // Get user from DynamoDB by username (using email as key, but checking username field)
+    // For now, we'll scan or use username as the key depending on your schema
     const userResult = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
-      Key: { email: { S: email } }
+      Key: { email: { S: username } }  // Using username as the email field for now
     }));
 
     if (!userResult.Item) {
-      return res.render('login', { error: 'User not found. Please sign up.' });
+      return res.render('login', { error: 'Invalid username or password' });
     }
 
     const user = unmarshall(userResult.Item);
 
-    // Verify TOTP code
-    if (!verifyTOTP(user.totpSecret, code)) {
-      return res.render('login', { error: 'Invalid code. Please try again.' });
+    // Verify password with bcrypt
+    const passwordMatch = await bcrypt.compare(password, user.passwordHash || '');
+    if (!passwordMatch) {
+      return res.render('login', { error: 'Invalid username or password' });
     }
 
     // Set session
-    req.session.email = email;
+    req.session.email = username;
+    req.session.username = user.username || username;
     req.session.onboardingComplete = user.onboardingComplete || false;
     req.session.loginTime = Date.now();
 
@@ -529,7 +533,7 @@ app.post('/login', async (req, res) => {
       }
 
       // Session successfully saved to DynamoDB
-      console.log(`[Login] Session saved for ${email}`);
+      console.log(`[Login] User logged in: ${username}`);
 
       // Redirect based on onboarding status or returnTo
       if (returnTo && returnTo !== '/' && returnTo !== '/login') {
