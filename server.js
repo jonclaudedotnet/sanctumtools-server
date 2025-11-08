@@ -4,12 +4,13 @@ const session = require('express-session');
 const DynamoDBStore = require('connect-dynamodb')(session);
 const path = require('path');
 const crypto = require('crypto');
-const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, CreateTableCommand, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, CreateTableCommand, DescribeTableCommand, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const bcrypt = require('bcrypt');
 const Anthropic = require('@anthropic-ai/sdk');
+const { sendVerificationEmail, sendWelcomeEmail } = require('./lib/emailService');
 
 const app = express();
 const dynamodb = new DynamoDBClient({ region: 'us-east-1' });
@@ -331,9 +332,57 @@ function isSafetyAssessmentResponse(message, previousWasCrisis) {
   return safetyIndicators.some(indicator => messageLower.includes(indicator));
 }
 
-// Initialize crisis events table on startup
+/**
+ * Create the pending-users DynamoDB table if it doesn't exist
+ */
+async function createPendingUsersTable() {
+  const tableName = 'sanctumtools-pending-users';
+
+  try {
+    // Check if table already exists
+    await dynamodb.send(new DescribeTableCommand({
+      TableName: tableName
+    }));
+    console.log(`[Pending Users Table] Table ${tableName} already exists`);
+    return true;
+  } catch (error) {
+    if (error.name === 'ResourceNotFoundException') {
+      // Table doesn't exist, create it
+      try {
+        await dynamodb.send(new CreateTableCommand({
+          TableName: tableName,
+          KeySchema: [
+            { AttributeName: 'email', KeyType: 'HASH' }
+          ],
+          AttributeDefinitions: [
+            { AttributeName: 'email', AttributeType: 'S' }
+          ],
+          BillingMode: 'PAY_PER_REQUEST',
+          TimeToLiveSpecification: {
+            Enabled: true,
+            AttributeName: 'ttl'
+          }
+        }));
+        console.log(`[Pending Users Table] Created table ${tableName} successfully`);
+        return true;
+      } catch (createError) {
+        console.error(`[Pending Users Table] Failed to create table:`, createError);
+        return false;
+      }
+    } else {
+      console.error(`[Pending Users Table] Error checking table:`, error);
+      return false;
+    }
+  }
+}
+
+// Initialize tables on startup
 createCrisisEventsTable().catch(error => {
   console.error('[Startup] Failed to ensure crisis events table exists:', error);
+});
+
+createPendingUsersTable().catch(error => {
+  console.error('[Startup] Failed to ensure pending users table exists:', error);
 });
 
 // Home page (login/signup)
@@ -352,42 +401,197 @@ app.get('/signup', (req, res) => {
   res.render('signup', { error: null });
 });
 
-// Sign up - handle form submission
+// Sign up - handle form submission with email verification
 app.post('/signup', async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, password, confirmPassword } = req.body;
+    const baseUrl = process.env.BASE_URL || `http://${req.headers.host}`;
 
-    if (!email) {
-      return res.render('signup', { error: 'Email is required' });
+    // Validate inputs
+    if (!email || !password || !confirmPassword) {
+      return res.render('signup', { error: 'Email, password, and confirmation are required' });
     }
 
-    // Check if user exists
-    const userResult = await dynamodb.send(new GetItemCommand({
+    if (password !== confirmPassword) {
+      return res.render('signup', { error: 'Passwords do not match' });
+    }
+
+    if (password.length < 8) {
+      return res.render('signup', { error: 'Password must be at least 8 characters' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.render('signup', { error: 'Invalid email format' });
+    }
+
+    // Check if user already exists
+    const existingUser = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
       Key: { email: { S: email } }
     }));
 
-    if (userResult.Item) {
+    if (existingUser.Item) {
       return res.render('signup', { error: 'Account already exists. Please log in.' });
     }
 
-    // Generate TOTP secret
-    const secret = speakeasy.generateSecret({
-      name: `SanctumTools (${email})`,
-      issuer: 'SanctumTools'
-    });
+    // Check if there's already a pending signup
+    const pendingUser = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-pending-users',
+      Key: { email: { S: email } }
+    }));
 
-    // Generate QR code
-    const qrCode = await QRCode.toDataURL(secret.otpauth_url);
+    if (pendingUser.Item) {
+      const pendingData = unmarshall(pendingUser.Item);
+      // If pending signup is still valid (within 24 hours), show error
+      if (pendingData.createdAt && Date.now() - new Date(pendingData.createdAt).getTime() < 24 * 60 * 60 * 1000) {
+        return res.render('signup', { error: 'Verification email already sent. Please check your inbox.' });
+      }
+    }
 
-    // Store setup token in session
-    req.session.setupEmail = email;
-    req.session.setupSecret = secret.base32;
+    // Generate verification token (32 bytes = 64 hex characters)
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours from now
+    const ttl = Math.floor(expiresAt / 1000); // TTL in seconds
 
-    res.render('setup-2fa', { qrCode, secret: secret.base32 });
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Store pending user in DynamoDB with TTL
+    await dynamodb.send(new PutItemCommand({
+      TableName: 'sanctumtools-pending-users',
+      Item: marshall({
+        email: email,
+        hashedPassword: hashedPassword,
+        verificationToken: verificationToken,
+        expiresAt: expiresAt,
+        ttl: ttl,
+        createdAt: new Date().toISOString()
+      })
+    }));
+
+    // Send verification email
+    const emailResult = await sendVerificationEmail(email, verificationToken, baseUrl);
+
+    if (!emailResult.success) {
+      return res.render('signup', { error: 'Failed to send verification email. Please try again.' });
+    }
+
+    // Show confirmation page with email display
+    res.render('signup-confirmation', { email });
   } catch (error) {
     console.error('Signup error:', error);
     res.render('signup', { error: 'Signup failed. Please try again.' });
+  }
+});
+
+// Verify email and complete signup
+app.get('/verify-email', async (req, res) => {
+  try {
+    const { token, email } = req.query;
+
+    if (!token || !email) {
+      return res.render('error', {
+        error: 'Invalid Verification Link',
+        message: 'The verification link is missing required parameters.',
+        code: '400'
+      });
+    }
+
+    // Look up pending user
+    const pendingUserResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-pending-users',
+      Key: { email: { S: email } }
+    }));
+
+    if (!pendingUserResult.Item) {
+      return res.render('error', {
+        error: 'Verification Failed',
+        message: 'No pending signup found for this email. Please sign up again.',
+        code: '404'
+      });
+    }
+
+    const pendingUser = unmarshall(pendingUserResult.Item);
+
+    // Verify token matches
+    if (pendingUser.verificationToken !== token) {
+      return res.render('error', {
+        error: 'Invalid Token',
+        message: 'The verification token is invalid. Please try signing up again.',
+        code: '403'
+      });
+    }
+
+    // Check if token has expired
+    if (Date.now() > pendingUser.expiresAt) {
+      return res.render('error', {
+        error: 'Link Expired',
+        message: 'This verification link has expired. Please sign up again.',
+        code: '410'
+      });
+    }
+
+    // Check if user already exists (double-check)
+    const existingUser = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-users',
+      Key: { email: { S: email } }
+    }));
+
+    if (existingUser.Item) {
+      return res.render('error', {
+        error: 'Account Already Exists',
+        message: 'An account with this email already exists. Please log in.',
+        code: '409'
+      });
+    }
+
+    // Create user account
+    await dynamodb.send(new PutItemCommand({
+      TableName: 'sanctumtools-users',
+      Item: marshall({
+        email: email,
+        hashedPassword: pendingUser.hashedPassword,
+        createdAt: new Date().toISOString(),
+        onboardingComplete: false,
+        deviceTokens: []
+      })
+    }));
+
+    // Delete pending user entry
+    await dynamodb.send(new DeleteItemCommand({
+      TableName: 'sanctumtools-pending-users',
+      Key: { email: { S: email } }
+    }));
+
+    // Create authenticated session
+    req.session.email = email;
+    req.session.onboardingComplete = false;
+    req.session.loginTime = Date.now();
+
+    // Send welcome email
+    await sendWelcomeEmail(email, email.split('@')[0]);
+
+    // Save session and redirect
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.render('error', {
+          error: 'Session Error',
+          message: 'Failed to create session. Please try logging in.',
+          code: '500'
+        });
+      }
+      res.redirect('/onboarding');
+    });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.render('error', {
+      error: 'Verification Error',
+      message: 'An error occurred during email verification. Please try again.',
+      code: '500'
+    });
   }
 });
 
