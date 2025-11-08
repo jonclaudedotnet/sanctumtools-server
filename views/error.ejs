@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title || 'Error' %> - SanctumTools</title>
+  <link rel="stylesheet" href="/css/design-system.css">
+  <style>
+    .error-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--color-background) 0%, #f0e8dd 100%);
+      padding: var(--spacing-lg);
+    }
+
+    .error-card {
+      background: var(--color-white);
+      border-radius: var(--radius-2xl);
+      padding: var(--spacing-2xl);
+      max-width: 540px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(153, 50, 168, 0.15);
+      text-align: center;
+    }
+
+    .error-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto var(--spacing-lg);
+      background: linear-gradient(135deg, var(--color-crisis), #dc2626);
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: shake 0.5s ease-out;
+    }
+
+    .error-icon svg {
+      width: 48px;
+      height: 48px;
+      color: var(--color-white);
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+      20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+
+    .error-code {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .error-title {
+      font-size: var(--font-size-2xl);
+      font-weight: var(--font-weight-bold);
+      color: var(--color-text-primary);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .error-message {
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-base);
+      line-height: var(--line-height-relaxed);
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .error-actions {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+      margin-top: var(--spacing-xl);
+    }
+
+    .help-text {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-sm);
+      margin-top: var(--spacing-xl);
+      padding-top: var(--spacing-lg);
+      border-top: 1px solid var(--color-gray-200);
+    }
+
+    .help-text a {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-weight: var(--font-weight-medium);
+    }
+
+    .help-text a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 480px) {
+      .error-card {
+        padding: var(--spacing-lg);
+      }
+
+      .error-title {
+        font-size: var(--font-size-xl);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="error-card animate-fade-in">
+      <div class="error-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+
+      <% if (status) { %>
+        <div class="error-code">Error <%= status %></div>
+      <% } %>
+
+      <h1 class="error-title"><%= title || 'Something went wrong' %></h1>
+
+      <p class="error-message">
+        <%= message || 'An unexpected error occurred. Please try again later.' %>
+      </p>
+
+      <div class="error-actions">
+        <a href="/" class="btn btn-primary btn-full">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="margin-right: 8px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          Go to Homepage
+        </a>
+        <button onclick="history.back()" class="btn btn-secondary btn-full">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="margin-right: 8px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Go Back
+        </button>
+      </div>
+
+      <div class="help-text">
+        <p>If this problem persists, please <a href="mailto:support@sanctumtools.com">contact support</a></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
