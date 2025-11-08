@@ -517,7 +517,11 @@ app.post('/login', async (req, res) => {
     req.session.onboardingComplete = user.onboardingComplete || false;
     req.session.loginTime = Date.now();
 
-    // Save session and wait for confirmation
+    // Get returnTo URL before saving
+    const returnTo = req.session.returnTo;
+    delete req.session.returnTo;
+
+    // Save session - only do this ONCE
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
@@ -527,25 +531,14 @@ app.post('/login', async (req, res) => {
       // Session successfully saved to DynamoDB
       console.log(`[Login] Session saved for ${email}`);
 
-      // Check if there's a returnTo URL
-      const returnTo = req.session.returnTo;
-      delete req.session.returnTo;
-
-      // Save the deletion of returnTo
-      req.session.save((delErr) => {
-        if (delErr) {
-          console.error('Failed to clear returnTo:', delErr);
-        }
-
-        // Redirect based on onboarding status or returnTo
-        if (returnTo && returnTo !== '/' && returnTo !== '/login') {
-          res.redirect(returnTo);
-        } else if (user.onboardingComplete) {
-          res.redirect('/dashboard');
-        } else {
-          res.redirect('/onboarding');
-        }
-      });
+      // Redirect based on onboarding status or returnTo
+      if (returnTo && returnTo !== '/' && returnTo !== '/login') {
+        res.redirect(returnTo);
+      } else if (user.onboardingComplete) {
+        res.redirect('/dashboard');
+      } else {
+        res.redirect('/onboarding');
+      }
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -608,6 +601,7 @@ app.post('/complete-onboarding', isAuthenticated, async (req, res) => {
         console.error('Failed to save onboarding session:', err);
         return res.status(500).json({ error: 'Failed to save onboarding status' });
       }
+      console.log(`[Onboarding] Completed for ${email}`);
       res.json({ success: true, redirectUrl: '/dashboard' });
     });
   } catch (error) {
