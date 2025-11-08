@@ -508,8 +508,29 @@ app.post('/login', async (req, res) => {
     req.session.onboardingComplete = user.onboardingComplete || false;
     req.session.loginTime = Date.now();
 
-    // Save session explicitly before redirecting
+    // Save session with timeout
+    let saved = false;
+    const timeout = setTimeout(() => {
+      if (!saved) {
+        console.error('Session save timeout - proceeding without confirmation');
+        saved = true;
+        const returnTo = req.session.returnTo;
+        delete req.session.returnTo;
+        if (returnTo && returnTo !== '/' && returnTo !== '/login') {
+          res.redirect(returnTo);
+        } else if (user.onboardingComplete) {
+          res.redirect('/dashboard');
+        } else {
+          res.redirect('/onboarding');
+        }
+      }
+    }, 5000);
+
     req.session.save((err) => {
+      if (saved) return;
+      clearTimeout(timeout);
+      saved = true;
+
       if (err) {
         console.error('Session save error:', err);
         return res.render('login', { error: 'Session creation failed. Please try again.' });
