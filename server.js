@@ -32,7 +32,7 @@ app.use(session({
     table: 'sanctumtools-sessions-new',
     prefix: 'sess:',
     touchAfter: 24 * 60 * 60, // Update TTL every 24 hours
-    ttl: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+    ttl: 7 * 24 * 60 * 60 // 7 days in SECONDS (not milliseconds)
   }),
   secret: SESSION_SECRET,
   resave: false,
@@ -75,20 +75,29 @@ function isAuthenticated(req, res, next) {
       req.session.regenerate((err) => {
         if (err) {
           console.error('Session regeneration error:', err);
+          return next(err);
         }
+        next();
       });
+    } else {
+      return next();
     }
-    return next();
-  }
+  } else {
+    // For API routes, return 401 instead of redirecting
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
 
-  // For API routes, return 401 instead of redirecting
-  if (req.path.startsWith('/api/')) {
-    return res.status(401).json({ error: 'Authentication required' });
+    // Store the original URL to redirect back after login
+    req.session.returnTo = req.originalUrl;
+    req.session.save((err) => {
+      if (err) {
+        console.error('Failed to save returnTo:', err);
+        return res.redirect('/');
+      }
+      res.redirect('/');
+    });
   }
-
-  // Store the original URL to redirect back after login
-  req.session.returnTo = req.originalUrl;
-  res.redirect('/');
 }
 
 // Helper function to verify TOTP
@@ -508,14 +517,27 @@ app.post('/login', async (req, res) => {
     req.session.onboardingComplete = user.onboardingComplete || false;
     req.session.loginTime = Date.now();
 
-    // Save session with timeout
-    let saved = false;
-    const timeout = setTimeout(() => {
-      if (!saved) {
-        console.error('Session save timeout - proceeding without confirmation');
-        saved = true;
-        const returnTo = req.session.returnTo;
-        delete req.session.returnTo;
+    // Save session and wait for confirmation
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.render('login', { error: 'Session creation failed. Please try again.' });
+      }
+
+      // Session successfully saved to DynamoDB
+      console.log(`[Login] Session saved for ${email}`);
+
+      // Check if there's a returnTo URL
+      const returnTo = req.session.returnTo;
+      delete req.session.returnTo;
+
+      // Save the deletion of returnTo
+      req.session.save((delErr) => {
+        if (delErr) {
+          console.error('Failed to clear returnTo:', delErr);
+        }
+
+        // Redirect based on onboarding status or returnTo
         if (returnTo && returnTo !== '/' && returnTo !== '/login') {
           res.redirect(returnTo);
         } else if (user.onboardingComplete) {
@@ -523,31 +545,7 @@ app.post('/login', async (req, res) => {
         } else {
           res.redirect('/onboarding');
         }
-      }
-    }, 5000);
-
-    req.session.save((err) => {
-      if (saved) return;
-      clearTimeout(timeout);
-      saved = true;
-
-      if (err) {
-        console.error('Session save error:', err);
-        return res.render('login', { error: 'Session creation failed. Please try again.' });
-      }
-
-      // Check if there's a returnTo URL
-      const returnTo = req.session.returnTo;
-      delete req.session.returnTo;
-
-      // Redirect based on onboarding status or returnTo
-      if (returnTo && returnTo !== '/' && returnTo !== '/login') {
-        res.redirect(returnTo);
-      } else if (user.onboardingComplete) {
-        res.redirect('/dashboard');
-      } else {
-        res.redirect('/onboarding');
-      }
+      });
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -603,8 +601,15 @@ app.post('/complete-onboarding', isAuthenticated, async (req, res) => {
       })
     }));
 
+    // Update session and save to DynamoDB
     req.session.onboardingComplete = true;
-    res.json({ success: true, redirectUrl: '/dashboard' });
+    req.session.save((err) => {
+      if (err) {
+        console.error('Failed to save onboarding session:', err);
+        return res.status(500).json({ error: 'Failed to save onboarding status' });
+      }
+      res.json({ success: true, redirectUrl: '/dashboard' });
+    });
   } catch (error) {
     console.error('Onboarding completion error:', error);
     res.status(500).json({ error: 'Failed to complete onboarding' });
