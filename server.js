@@ -1158,7 +1158,7 @@ app.post('/login', async (req, res) => {
         email: loginField,
         username: user.username || loginField,
         onboardingComplete: user.onboardingComplete || false,
-        sessionId: req.sessionID
+        sessionToken: req.sessionID
       });
     });
   } catch (error) {
