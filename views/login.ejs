@@ -83,6 +83,21 @@
       height: 16px;
     }
 
+    .forgot-password-link {
+      display: inline-block;
+      margin-top: var(--spacing-sm);
+      color: var(--color-primary);
+      text-decoration: none;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      transition: color var(--transition-fast);
+    }
+
+    .forgot-password-link:hover {
+      color: var(--color-primary-dark);
+      text-decoration: underline;
+    }
+
     @media (max-width: 480px) {
       .auth-card {
         padding: var(--spacing-lg);
@@ -147,6 +162,7 @@
             aria-required="true"
           >
           <span class="form-help">Enter your password</span>
+          <a href="/forgot-password" class="forgot-password-link">Forgot password?</a>
         </div>
 
         <button type="submit" class="btn btn-primary btn-full btn-lg">
