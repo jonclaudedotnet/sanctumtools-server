@@ -67,6 +67,10 @@ This app is designed to run on Node.js hosting (Heroku, AWS EC2, Railway, Render
 
 It does NOT use Lambda because we need persistent application state for server-side sessions.
 
+### Automated Deployment
+
+This repository includes GitHub Actions for automated deployment to EC2 on every push to the master branch.
+
 ## Key Differences from React SPA
 
 | Feature | React SPA | This Server |
