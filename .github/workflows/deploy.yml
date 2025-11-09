@@ -1,0 +1,48 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'sanctumtools-server/**'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  deploy:
+    name: Deploy SanctumTools to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: 3.93.46.170
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "🚀 Starting deployment..."
+            cd /opt/sanctumtools-server
+
+            echo "📥 Pulling latest code from GitHub..."
+            git pull origin master
+
+            echo "📦 Installing dependencies..."
+            npm install --production
+
+            echo "🔄 Restarting service..."
+            sudo systemctl restart sanctumtools
+
+            echo "⏳ Waiting for service to start..."
+            sleep 5
+
+            echo "✅ Checking service status..."
+            sudo systemctl status sanctumtools --no-pager | head -10
+
+            echo "🔍 Checking if port 3000 is listening..."
+            sudo ss -tlnp | grep 3000 || echo "Warning: Port 3000 not yet listening"
+
+            echo "📋 Recent logs:"
+            sudo journalctl -u sanctumtools -n 20 --no-pager
+
+            echo "✨ Deployment complete!"
