@@ -67,8 +67,8 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Helper function to check if user is logged in
-function isAuthenticated(req, res, next) {
-  // Check if session exists and has email
+async function isAuthenticated(req, res, next) {
+  // First check if session exists and has email (cookie-based session)
   if (req.session && req.session.email) {
     // Regenerate session ID periodically for security (once per day)
     const lastRegenerated = req.session.lastRegenerated || Date.now();
@@ -85,6 +85,37 @@ function isAuthenticated(req, res, next) {
       return next();
     }
   } else {
+    // Check for Bearer token in Authorization header (for API clients)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const sessionToken = authHeader.substring(7);
+        const sessionKey = `sess:${sessionToken}`;
+
+        // Look up session in DynamoDB
+        const sessionResult = await dynamodb.send(new GetItemCommand({
+          TableName: 'sanctumtools-sessions-new',
+          Key: { id: { S: sessionKey } }
+        }));
+
+        if (sessionResult.Item) {
+          const sessionData = unmarshall(sessionResult.Item);
+          const session = JSON.parse(sessionData.sess);
+
+          if (session.email) {
+            // Attach session data to request for use in route handlers
+            req.session = req.session || {};
+            req.session.email = session.email;
+            req.session.onboardingComplete = session.onboardingComplete || false;
+            return next();
+          }
+        }
+      } catch (error) {
+        console.error('[Bearer Token Auth Error]:', error);
+        return res.status(401).json({ error: 'Invalid authentication token' });
+      }
+    }
+
     // For API routes, return 401 instead of redirecting
     if (req.path.startsWith('/api/')) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -1607,6 +1638,49 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
     res.status(500).json({
       error: 'I apologize, but I encountered an issue processing your message. Please try again.'
     });
+  }
+});
+
+// Validate session endpoint - checks Bearer token from Authorization header
+app.get('/api/validate-session', async (req, res) => {
+  try {
+    // Extract Bearer token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No Bearer token provided' });
+    }
+
+    const sessionToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    // Look up session in DynamoDB
+    const sessionKey = `sess:${sessionToken}`;
+    const sessionResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-sessions-new',
+      Key: { id: { S: sessionKey } }
+    }));
+
+    if (!sessionResult.Item) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
+    // Parse session data
+    const sessionData = unmarshall(sessionResult.Item);
+    const session = JSON.parse(sessionData.sess);
+
+    // Check if session has email (user is authenticated)
+    if (!session.email) {
+      return res.status(401).json({ error: 'Session not authenticated' });
+    }
+
+    // Return session validation response
+    res.json({
+      valid: true,
+      email: session.email,
+      onboardingComplete: session.onboardingComplete || false
+    });
+  } catch (error) {
+    console.error('[Session Validation Error]:', error);
+    res.status(500).json({ error: 'Failed to validate session' });
   }
 });
 
