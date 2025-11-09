@@ -1021,6 +1021,94 @@ app.get('/login', (req, res) => {
   res.render('login', { error: null });
 });
 
+// API Login endpoint (used by React frontend)
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password, email, code } = req.body;
+    const loginField = email || username;
+
+    if (!loginField) {
+      return res.status(400).json({ error: 'Email/username is required' });
+    }
+
+    // Get user from DynamoDB by email
+    const userResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-users',
+      Key: { email: { S: loginField } }
+    }));
+
+    if (!userResult.Item) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = unmarshall(userResult.Item);
+
+    // Check for device token authentication (empty code means device token login attempt)
+    if (code === '' && !password) {
+      // Device token login - check cookie
+      const deviceToken = req.cookies.sanctumtools_device_token;
+      if (deviceToken && user.deviceTokens && user.deviceTokens.includes(deviceToken)) {
+        // Valid device token - create session
+        req.session.email = loginField;
+        req.session.username = user.username || loginField;
+        req.session.onboardingComplete = user.onboardingComplete || false;
+        req.session.loginTime = Date.now();
+
+        req.session.save((err) => {
+          if (err) {
+            return res.status(500).json({ error: 'Session creation failed' });
+          }
+
+          return res.json({
+            success: true,
+            email: loginField,
+            username: user.username || loginField,
+            onboardingComplete: user.onboardingComplete || false,
+            sessionToken: req.sessionID,
+            skipTOTP: true
+          });
+        });
+        return;
+      }
+      // Invalid or missing device token
+      return res.status(401).json({ error: 'Invalid device token' });
+    }
+
+    // Password authentication
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.passwordHash || '');
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Set session
+    req.session.email = loginField;
+    req.session.username = user.username || loginField;
+    req.session.onboardingComplete = user.onboardingComplete || false;
+    req.session.loginTime = Date.now();
+
+    req.session.save((err) => {
+      if (err) {
+        return res.status(500).json({ error: 'Session creation failed' });
+      }
+
+      res.json({
+        success: true,
+        email: loginField,
+        username: user.username || loginField,
+        onboardingComplete: user.onboardingComplete || false,
+        sessionToken: req.sessionID
+      });
+    });
+  } catch (error) {
+    console.error('[API Login] Error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
 // Login - handle form submission (username/password)
 app.post('/login', async (req, res) => {
   try {
