@@ -1,0 +1,22 @@
+[Unit]
+Description=SanctumTools Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/opt/sanctumtools-server
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+# Load .env file
+EnvironmentFile=/opt/sanctumtools-server/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sanctumtools
+
+[Install]
+WantedBy=multi-user.target
