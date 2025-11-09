@@ -994,6 +994,25 @@ app.get('/test-code', async (req, res) => {
   }
 });
 
+// Device Token Authentication - stub for frontend auth flow
+app.post('/api/device-token-auth', async (req, res) => {
+  try {
+    const { email, deviceToken } = req.body;
+
+    if (!email || !deviceToken) {
+      return res.status(401).json({ error: 'Invalid device token' });
+    }
+
+    // For now, just return invalid to allow fallback to password login
+    // TODO: Implement actual device token validation with DynamoDB
+    console.log(`[Device Token Auth] Failed attempt for ${email}`);
+    return res.status(401).json({ error: 'Invalid device token' });
+  } catch (error) {
+    console.error('Device token auth error:', error);
+    return res.status(401).json({ error: 'Invalid device token' });
+  }
+});
+
 // Login - show form
 app.get('/login', (req, res) => {
   if (req.session.email) {
@@ -1005,21 +1024,21 @@ app.get('/login', (req, res) => {
 // Login - handle form submission (username/password)
 app.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, email } = req.body;
+    const loginField = email || username;
 
-    if (!username || !password) {
-      return res.render('login', { error: 'Username and password are required' });
+    if (!loginField || !password) {
+      return res.status(400).json({ error: 'Email/username and password are required' });
     }
 
-    // Get user from DynamoDB by username (using email as key, but checking username field)
-    // For now, we'll scan or use username as the key depending on your schema
+    // Get user from DynamoDB by email
     const userResult = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
-      Key: { email: { S: username } }  // Using username as the email field for now
+      Key: { email: { S: loginField } }
     }));
 
     if (!userResult.Item) {
-      return res.render('login', { error: 'Invalid username or password' });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = unmarshall(userResult.Item);
@@ -1027,41 +1046,36 @@ app.post('/login', async (req, res) => {
     // Verify password with bcrypt
     const passwordMatch = await bcrypt.compare(password, user.passwordHash || '');
     if (!passwordMatch) {
-      return res.render('login', { error: 'Invalid username or password' });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Set session
-    req.session.email = username;
-    req.session.username = user.username || username;
+    req.session.email = loginField;
+    req.session.username = user.username || loginField;
     req.session.onboardingComplete = user.onboardingComplete || false;
     req.session.loginTime = Date.now();
 
-    // Get returnTo URL before saving
-    const returnTo = req.session.returnTo;
-    delete req.session.returnTo;
-
-    // Save session - only do this ONCE
+    // Save session
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
-        return res.render('login', { error: 'Session creation failed. Please try again.' });
+        return res.status(500).json({ error: 'Session creation failed' });
       }
 
-      // Session successfully saved to DynamoDB
-      console.log(`[Login] User logged in: ${username}`);
+      console.log(`[Login] User logged in: ${loginField}`);
 
-      // Redirect based on onboarding status or returnTo
-      if (returnTo && returnTo !== '/' && returnTo !== '/login') {
-        res.redirect(returnTo);
-      } else if (user.onboardingComplete) {
-        res.redirect('/dashboard');
-      } else {
-        res.redirect('/onboarding');
-      }
+      // Return JSON response for API clients
+      res.json({
+        success: true,
+        email: loginField,
+        username: user.username || loginField,
+        onboardingComplete: user.onboardingComplete || false,
+        sessionId: req.sessionID
+      });
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.render('login', { error: 'Login failed. Please try again.' });
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
