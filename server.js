@@ -10,7 +10,7 @@ const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const bcrypt = require('bcrypt');
 const Anthropic = require('@anthropic-ai/sdk');
-const { sendVerificationEmail, sendWelcomeEmail } = require('./lib/emailService');
+const { sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail } = require('./lib/emailService');
 
 const app = express();
 const dynamodb = new DynamoDBClient({ region: 'us-east-1' });
@@ -376,6 +376,50 @@ async function createPendingUsersTable() {
   }
 }
 
+/**
+ * Create the pending-password-resets DynamoDB table if it doesn't exist
+ */
+async function createPendingPasswordResetsTable() {
+  const tableName = 'sanctumtools-pending-password-resets';
+
+  try {
+    // Check if table already exists
+    await dynamodb.send(new DescribeTableCommand({
+      TableName: tableName
+    }));
+    console.log(`[Pending Password Resets Table] Table ${tableName} already exists`);
+    return true;
+  } catch (error) {
+    if (error.name === 'ResourceNotFoundException') {
+      // Table doesn't exist, create it
+      try {
+        await dynamodb.send(new CreateTableCommand({
+          TableName: tableName,
+          KeySchema: [
+            { AttributeName: 'email', KeyType: 'HASH' }
+          ],
+          AttributeDefinitions: [
+            { AttributeName: 'email', AttributeType: 'S' }
+          ],
+          BillingMode: 'PAY_PER_REQUEST',
+          TimeToLiveSpecification: {
+            Enabled: true,
+            AttributeName: 'ttl'
+          }
+        }));
+        console.log(`[Pending Password Resets Table] Created table ${tableName} successfully`);
+        return true;
+      } catch (createError) {
+        console.error(`[Pending Password Resets Table] Failed to create table:`, createError);
+        return false;
+      }
+    } else {
+      console.error(`[Pending Password Resets Table] Error checking table:`, error);
+      return false;
+    }
+  }
+}
+
 // Initialize tables on startup
 createCrisisEventsTable().catch(error => {
   console.error('[Startup] Failed to ensure crisis events table exists:', error);
@@ -383,6 +427,10 @@ createCrisisEventsTable().catch(error => {
 
 createPendingUsersTable().catch(error => {
   console.error('[Startup] Failed to ensure pending users table exists:', error);
+});
+
+createPendingPasswordResetsTable().catch(error => {
+  console.error('[Startup] Failed to ensure pending password resets table exists:', error);
 });
 
 // Home page (login/signup)
@@ -591,6 +639,269 @@ app.get('/verify-email', async (req, res) => {
       error: 'Verification Error',
       message: 'An error occurred during email verification. Please try again.',
       code: '500'
+    });
+  }
+});
+
+// Forgot Password - show form
+app.get('/forgot-password', (req, res) => {
+  if (req.session.email) {
+    return res.redirect('/dashboard');
+  }
+  res.render('forgot-password', { error: null, message: null });
+});
+
+// Forgot Password - handle email submission
+app.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const baseUrl = process.env.BASE_URL || `http://${req.headers.host}`;
+
+    // Validate email
+    if (!email) {
+      return res.render('forgot-password', {
+        error: 'Email address is required',
+        message: null
+      });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.render('forgot-password', {
+        error: 'Invalid email format',
+        message: null
+      });
+    }
+
+    // Check if user exists
+    const userResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-users',
+      Key: { email: { S: email } }
+    }));
+
+    // Always show success message for security (don't reveal if email exists)
+    if (!userResult.Item) {
+      return res.render('forgot-password', {
+        error: null,
+        message: 'If an account exists for this email, you will receive a password reset link shortly.'
+      });
+    }
+
+    // Generate reset token (32 bytes = 64 hex characters)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + (1 * 60 * 60 * 1000); // 1 hour from now
+    const ttl = Math.floor(expiresAt / 1000); // TTL in seconds
+
+    // Store pending password reset in DynamoDB with TTL
+    await dynamodb.send(new PutItemCommand({
+      TableName: 'sanctumtools-pending-password-resets',
+      Item: marshall({
+        email: email,
+        resetToken: resetToken,
+        expiresAt: expiresAt,
+        ttl: ttl,
+        createdAt: new Date().toISOString()
+      })
+    }));
+
+    // Send password reset email
+    const emailResult = await sendPasswordResetEmail(email, resetToken, baseUrl);
+
+    if (!emailResult.success) {
+      console.error('Failed to send password reset email:', emailResult.error);
+      // Still show success message for security
+    }
+
+    console.log(`[Password Reset] Reset link generated for ${email}`);
+
+    // Show success message
+    res.render('forgot-password', {
+      error: null,
+      message: 'If an account exists for this email, you will receive a password reset link shortly.'
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.render('forgot-password', {
+      error: 'An error occurred. Please try again.',
+      message: null
+    });
+  }
+});
+
+// Reset Password - show form with token validation
+app.get('/reset-password', async (req, res) => {
+  try {
+    const { token, email } = req.query;
+
+    if (!token || !email) {
+      return res.render('error', {
+        error: 'Invalid Reset Link',
+        message: 'The reset link is missing required parameters.',
+        code: '400'
+      });
+    }
+
+    // Look up pending password reset
+    const pendingResetResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-pending-password-resets',
+      Key: { email: { S: email } }
+    }));
+
+    if (!pendingResetResult.Item) {
+      return res.render('error', {
+        error: 'Reset Link Not Found',
+        message: 'This password reset link is invalid or has expired. Please request a new one.',
+        code: '404'
+      });
+    }
+
+    const pendingReset = unmarshall(pendingResetResult.Item);
+
+    // Verify token matches
+    if (pendingReset.resetToken !== token) {
+      return res.render('error', {
+        error: 'Invalid Reset Token',
+        message: 'The reset token is invalid. Please request a new password reset.',
+        code: '403'
+      });
+    }
+
+    // Check if token has expired
+    if (Date.now() > pendingReset.expiresAt) {
+      return res.render('error', {
+        error: 'Reset Link Expired',
+        message: 'This password reset link has expired. Please request a new one.',
+        code: '410'
+      });
+    }
+
+    // Render reset password form
+    res.render('reset-password', {
+      token: token,
+      email: email,
+      error: null
+    });
+  } catch (error) {
+    console.error('Reset password form error:', error);
+    res.render('error', {
+      error: 'Reset Error',
+      message: 'An error occurred while processing your reset request. Please try again.',
+      code: '500'
+    });
+  }
+});
+
+// Reset Password - handle password update
+app.post('/reset-password', async (req, res) => {
+  try {
+    const { token, email, password, passwordConfirm } = req.body;
+
+    // Validate inputs
+    if (!token || !email || !password || !passwordConfirm) {
+      return res.render('reset-password', {
+        token: token,
+        email: email,
+        error: 'All fields are required'
+      });
+    }
+
+    if (password !== passwordConfirm) {
+      return res.render('reset-password', {
+        token: token,
+        email: email,
+        error: 'Passwords do not match'
+      });
+    }
+
+    if (password.length < 8) {
+      return res.render('reset-password', {
+        token: token,
+        email: email,
+        error: 'Password must be at least 8 characters'
+      });
+    }
+
+    // Validate password requirements
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+
+    if (!hasUppercase || !hasLowercase || !hasNumber) {
+      return res.render('reset-password', {
+        token: token,
+        email: email,
+        error: 'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+      });
+    }
+
+    // Look up pending password reset
+    const pendingResetResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-pending-password-resets',
+      Key: { email: { S: email } }
+    }));
+
+    if (!pendingResetResult.Item) {
+      return res.render('error', {
+        error: 'Reset Link Not Found',
+        message: 'This password reset link is invalid or has expired. Please request a new one.',
+        code: '404'
+      });
+    }
+
+    const pendingReset = unmarshall(pendingResetResult.Item);
+
+    // Verify token matches
+    if (pendingReset.resetToken !== token) {
+      return res.render('error', {
+        error: 'Invalid Reset Token',
+        message: 'The reset token is invalid. Please request a new password reset.',
+        code: '403'
+      });
+    }
+
+    // Check if token has expired
+    if (Date.now() > pendingReset.expiresAt) {
+      return res.render('error', {
+        error: 'Reset Link Expired',
+        message: 'This password reset link has expired. Please request a new one.',
+        code: '410'
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Update user password in DynamoDB
+    await dynamodb.send(new UpdateItemCommand({
+      TableName: 'sanctumtools-users',
+      Key: { email: { S: email } },
+      UpdateExpression: 'SET hashedPassword = :password, updatedAt = :timestamp',
+      ExpressionAttributeValues: {
+        ':password': { S: hashedPassword },
+        ':timestamp': { S: new Date().toISOString() }
+      }
+    }));
+
+    // Delete pending password reset
+    await dynamodb.send(new DeleteItemCommand({
+      TableName: 'sanctumtools-pending-password-resets',
+      Key: { email: { S: email } }
+    }));
+
+    console.log(`[Password Reset] Password successfully reset for ${email}`);
+
+    // Render success page
+    res.render('error', {
+      error: 'Password Reset Successful',
+      message: 'Your password has been successfully reset. You can now log in with your new password.',
+      code: '200'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.render('reset-password', {
+      token: req.body.token,
+      email: req.body.email,
+      error: 'An error occurred while resetting your password. Please try again.'
     });
   }
 });
