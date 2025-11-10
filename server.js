@@ -1699,6 +1699,30 @@ app.get('/api/session-status', (req, res) => {
   res.json(status);
 });
 
+// Update last page visited (for user navigation tracking)
+app.post('/api/update-last-page', isAuthenticated, async (req, res) => {
+  try {
+    const { lastPage } = req.body;
+
+    if (!lastPage) {
+      return res.status(400).json({ error: 'lastPage is required' });
+    }
+
+    // Update session
+    req.session.lastPage = lastPage;
+    req.session.save((err) => {
+      if (err) {
+        console.error('[Update Last Page Error]:', err);
+        return res.status(500).json({ error: 'Failed to update last page' });
+      }
+      res.json({ success: true, lastPage });
+    });
+  } catch (error) {
+    console.error('[Update Last Page Error]:', error);
+    res.status(500).json({ error: 'Failed to update last page' });
+  }
+});
+
 // Logout
 app.get('/logout', (req, res) => {
   // Store session ID for logging
