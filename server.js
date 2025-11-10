@@ -1227,20 +1227,19 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Login - handle form submission (username/password)
+// Login - handle TOTP authentication
 app.post('/login', async (req, res) => {
   try {
-    const { username, password, email } = req.body;
-    const loginField = email || username;
+    const { email, code, rememberMe } = req.body;
 
-    if (!loginField) {
-      return res.status(400).json({ error: 'Email/username is required' });
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
     }
 
     // Get user from DynamoDB by email
     const userResult = await dynamodb.send(new GetItemCommand({
       TableName: 'sanctumtools-users',
-      Key: { email: { S: loginField } }
+      Key: { email: { S: email } }
     }));
 
     if (!userResult.Item) {
@@ -1249,12 +1248,12 @@ app.post('/login', async (req, res) => {
 
     const user = unmarshall(userResult.Item);
 
-    // Check for device token authentication
+    // Check for device token authentication (trusted device auto-login)
     const deviceToken = req.cookies['sanctum_device_token'];
-    if (deviceToken && await verifyDeviceToken(deviceToken, loginField)) {
-      // Device token is valid - skip password validation and create session
-      req.session.email = loginField;
-      req.session.username = user.username || loginField;
+    if (deviceToken && await verifyDeviceToken(deviceToken, email)) {
+      // Device token is valid - skip TOTP validation and create session
+      req.session.email = email;
+      req.session.username = user.username || email;
       req.session.onboardingComplete = user.onboardingComplete || false;
       req.session.loginTime = Date.now();
 
@@ -1264,12 +1263,12 @@ app.post('/login', async (req, res) => {
           return res.status(500).json({ error: 'Session creation failed' });
         }
 
-        console.log(`[Login] User logged in via device token: ${loginField}`);
+        console.log(`[Login] User logged in via device token: ${email}`);
 
         return res.json({
           success: true,
-          email: loginField,
-          username: user.username || loginField,
+          email: email,
+          username: user.username || email,
           onboardingComplete: user.onboardingComplete || false,
           sessionToken: req.sessionID,
           deviceTokenAuth: true
@@ -1278,22 +1277,41 @@ app.post('/login', async (req, res) => {
       return;
     }
 
-    // Otherwise, proceed with normal password validation
-    if (!password) {
-      return res.status(400).json({ error: 'Password is required' });
+    // Otherwise, require TOTP code
+    if (!code) {
+      return res.status(400).json({ error: 'Authenticator code is required' });
     }
 
-    // Verify password with bcrypt
-    const passwordMatch = await bcrypt.compare(password, user.passwordHash || '');
-    if (!passwordMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    // Verify TOTP code
+    const totpValid = verifyTOTP(user.totpSecret, code);
+    if (!totpValid) {
+      return res.status(401).json({ error: 'Invalid authenticator code' });
     }
 
     // Set session
-    req.session.email = loginField;
-    req.session.username = user.username || loginField;
+    req.session.email = email;
+    req.session.username = user.username || email;
     req.session.onboardingComplete = user.onboardingComplete || false;
     req.session.loginTime = Date.now();
+
+    // Generate device token if "Remember Me" is checked
+    let newDeviceToken = null;
+    if (rememberMe) {
+      try {
+        newDeviceToken = await generateDeviceToken(email);
+        // Set httpOnly cookie (90-day expiration)
+        res.cookie('sanctum_device_token', newDeviceToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: DEVICE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000
+        });
+        console.log(`[Login] Device token generated for ${email}`);
+      } catch (error) {
+        console.error('[Login] Device token generation failed:', error);
+        // Don't fail login if device token generation fails
+      }
+    }
 
     // Save session
     req.session.save((err) => {
@@ -1302,13 +1320,13 @@ app.post('/login', async (req, res) => {
         return res.status(500).json({ error: 'Session creation failed' });
       }
 
-      console.log(`[Login] User logged in: ${loginField}`);
+      console.log(`[Login] User logged in with TOTP: ${email}`);
 
       // Return JSON response for API clients
       res.json({
         success: true,
-        email: loginField,
-        username: user.username || loginField,
+        email: email,
+        username: user.username || email,
         onboardingComplete: user.onboardingComplete || false,
         sessionToken: req.sessionID
       });
