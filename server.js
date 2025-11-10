@@ -6,8 +6,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, CreateTableCommand, DescribeTableCommand, DeleteItemCommand, QueryCommand } = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
-const speakeasy = require('speakeasy');
-const QRCode = require('qrcode');
+// const speakeasy = require('speakeasy'); // REMOVED - no longer using TOTP authentication
+// const QRCode = require('qrcode'); // REMOVED - no longer using TOTP authentication
 const bcrypt = require('bcrypt');
 const Anthropic = require('@anthropic-ai/sdk');
 const { sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail } = require('./lib/emailService');
@@ -135,15 +135,15 @@ async function isAuthenticated(req, res, next) {
   }
 }
 
-// Helper function to verify TOTP
-function verifyTOTP(secret, token) {
-  return speakeasy.totp.verify({
-    secret,
-    encoding: 'base32',
-    token,
-    window: 2
-  });
-}
+// REMOVED - No longer using TOTP authentication
+// function verifyTOTP(secret, token) {
+//   return speakeasy.totp.verify({
+//     secret,
+//     encoding: 'base32',
+//     token,
+//     window: 2
+//   });
+// }
 
 // Device Token System
 // ==================
@@ -1139,6 +1139,72 @@ app.get('/login', (req, res) => {
   res.render('login', { error: null });
 });
 
+// API Signup endpoint (used by React frontend)
+app.post('/api/signup', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Check if user already exists
+    const existingUser = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-users',
+      Key: { email: { S: email } }
+    }));
+
+    if (existingUser.Item) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+
+    // Hash password with bcrypt
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Create new user in DynamoDB
+    await dynamodb.send(new PutItemCommand({
+      TableName: 'sanctumtools-users',
+      Item: marshall({
+        email: email,
+        passwordHash: hashedPassword,
+        onboardingComplete: false,
+        createdAt: new Date().toISOString()
+      })
+    }));
+
+    console.log(`[Signup] New user created: ${email}`);
+
+    // Auto-login after signup - create session
+    req.session.email = email;
+    req.session.username = email;
+    req.session.onboardingComplete = false;
+    req.session.loginTime = Date.now();
+
+    req.session.save((err) => {
+      if (err) {
+        console.error('[Signup] Session save error:', err);
+        return res.status(500).json({ error: 'Account created but session creation failed. Please login.' });
+      }
+
+      res.json({
+        success: true,
+        email: email,
+        username: email,
+        onboardingComplete: false,
+        sessionToken: req.sessionID
+      });
+    });
+  } catch (error) {
+    console.error('[API Signup] Error:', error);
+    res.status(500).json({ error: 'Signup failed' });
+  }
+});
+
 // API Login endpoint (used by React frontend)
 app.post('/api/login', async (req, res) => {
   try {
@@ -1227,115 +1293,8 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Login - handle TOTP authentication
-app.post('/login', async (req, res) => {
-  try {
-    const { email, code, rememberMe } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
-    // Get user from DynamoDB by email
-    const userResult = await dynamodb.send(new GetItemCommand({
-      TableName: 'sanctumtools-users',
-      Key: { email: { S: email } }
-    }));
-
-    if (!userResult.Item) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const user = unmarshall(userResult.Item);
-
-    // Check for device token authentication (trusted device auto-login)
-    const deviceToken = req.cookies['sanctum_device_token'];
-    if (deviceToken && await verifyDeviceToken(deviceToken, email)) {
-      // Device token is valid - skip TOTP validation and create session
-      req.session.email = email;
-      req.session.username = user.username || email;
-      req.session.onboardingComplete = user.onboardingComplete || false;
-      req.session.loginTime = Date.now();
-
-      req.session.save((err) => {
-        if (err) {
-          console.error('Session save error:', err);
-          return res.status(500).json({ error: 'Session creation failed' });
-        }
-
-        console.log(`[Login] User logged in via device token: ${email}`);
-
-        return res.json({
-          success: true,
-          email: email,
-          username: user.username || email,
-          onboardingComplete: user.onboardingComplete || false,
-          sessionToken: req.sessionID,
-          deviceTokenAuth: true
-        });
-      });
-      return;
-    }
-
-    // Otherwise, require TOTP code
-    if (!code) {
-      return res.status(400).json({ error: 'Authenticator code is required' });
-    }
-
-    // Verify TOTP code
-    const totpValid = verifyTOTP(user.totpSecret, code);
-    if (!totpValid) {
-      return res.status(401).json({ error: 'Invalid authenticator code' });
-    }
-
-    // Set session
-    req.session.email = email;
-    req.session.username = user.username || email;
-    req.session.onboardingComplete = user.onboardingComplete || false;
-    req.session.loginTime = Date.now();
-
-    // Generate device token if "Remember Me" is checked
-    let newDeviceToken = null;
-    if (rememberMe) {
-      try {
-        newDeviceToken = await generateDeviceToken(email);
-        // Set httpOnly cookie (90-day expiration)
-        res.cookie('sanctum_device_token', newDeviceToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: DEVICE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000
-        });
-        console.log(`[Login] Device token generated for ${email}`);
-      } catch (error) {
-        console.error('[Login] Device token generation failed:', error);
-        // Don't fail login if device token generation fails
-      }
-    }
-
-    // Save session
-    req.session.save((err) => {
-      if (err) {
-        console.error('Session save error:', err);
-        return res.status(500).json({ error: 'Session creation failed' });
-      }
-
-      console.log(`[Login] User logged in with TOTP: ${email}`);
-
-      // Return JSON response for API clients
-      res.json({
-        success: true,
-        email: email,
-        username: user.username || email,
-        onboardingComplete: user.onboardingComplete || false,
-        sessionToken: req.sessionID
-      });
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
-  }
-});
+// NOTE: This old /login endpoint has been removed.
+// Use /api/login instead (see line ~1143) which uses password-based authentication.
 
 // Onboarding page
 app.get('/onboarding', isAuthenticated, async (req, res) => {
