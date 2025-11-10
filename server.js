@@ -4,7 +4,7 @@ const session = require('express-session');
 const DynamoDBStore = require('connect-dynamodb')(session);
 const path = require('path');
 const crypto = require('crypto');
-const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, CreateTableCommand, DescribeTableCommand, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, CreateTableCommand, DescribeTableCommand, DeleteItemCommand, QueryCommand } = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
@@ -20,6 +20,8 @@ const anthropic = new Anthropic({
 
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-in-production';
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || '.sanctumtools.com';
+const DEVICE_TOKEN_TTL_DAYS = parseInt(process.env.DEVICE_TOKEN_TTL_DAYS || '90', 10); // 90 days default
 
 // Middleware
 app.use(express.static('public'));
@@ -141,6 +143,91 @@ function verifyTOTP(secret, token) {
     token,
     window: 2
   });
+}
+
+// Device Token System
+// ==================
+
+/**
+ * Generate a device token for trusted device authentication
+ * Uses bcrypt hashing for security and DynamoDB TTL for auto-cleanup
+ */
+async function generateDeviceToken(email) {
+  try {
+    const token = crypto.randomUUID();
+    const hashedToken = await bcrypt.hash(token, 10);
+    const ttl = Math.floor(Date.now() / 1000) + (DEVICE_TOKEN_TTL_DAYS * 24 * 60 * 60);
+
+    await dynamodb.send(new PutItemCommand({
+      TableName: 'sanctumtools-device-tokens',
+      Item: marshall({
+        tokenHash: hashedToken,
+        email,
+        createdAt: new Date().toISOString(),
+        ttl
+      })
+    }));
+
+    console.log(`[Device Token] Generated new device token for ${email}`);
+    return token;
+  } catch (error) {
+    console.error('[Device Token] Generation error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Verify a device token for trusted device auto-login
+ * Cleans up expired tokens automatically
+ */
+async function verifyDeviceToken(token, email) {
+  if (!token || !email) return false;
+
+  try {
+    // Query all device tokens for this email
+    const result = await dynamodb.send(new QueryCommand({
+      TableName: 'sanctumtools-device-tokens',
+      IndexName: 'email-index',
+      KeyConditionExpression: 'email = :email',
+      ExpressionAttributeValues: marshall({
+        ':email': email
+      })
+    }));
+
+    if (!result.Items || result.Items.length === 0) {
+      return false;
+    }
+
+    // Check if any token matches
+    for (const item of result.Items) {
+      const deviceToken = unmarshall(item);
+      const now = Math.floor(Date.now() / 1000);
+
+      if (deviceToken.ttl < now) {
+        // Clean up expired token
+        try {
+          await dynamodb.send(new DeleteItemCommand({
+            TableName: 'sanctumtools-device-tokens',
+            Key: marshall({ tokenHash: deviceToken.tokenHash })
+          }));
+        } catch (deleteError) {
+          console.warn('[Device Token] Could not clean up expired token:', deleteError);
+        }
+        continue;
+      }
+
+      const isMatch = await bcrypt.compare(token, deviceToken.tokenHash);
+      if (isMatch) {
+        console.log(`[Device Token] Valid device token verified for ${email}`);
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('[Device Token] Verification error:', error);
+    return false;
+  }
 }
 
 // Crisis Detection and Safety Functions
@@ -1146,8 +1233,8 @@ app.post('/login', async (req, res) => {
     const { username, password, email } = req.body;
     const loginField = email || username;
 
-    if (!loginField || !password) {
-      return res.status(400).json({ error: 'Email/username and password are required' });
+    if (!loginField) {
+      return res.status(400).json({ error: 'Email/username is required' });
     }
 
     // Get user from DynamoDB by email
@@ -1161,6 +1248,40 @@ app.post('/login', async (req, res) => {
     }
 
     const user = unmarshall(userResult.Item);
+
+    // Check for device token authentication
+    const deviceToken = req.cookies['sanctum_device_token'];
+    if (deviceToken && await verifyDeviceToken(deviceToken, loginField)) {
+      // Device token is valid - skip password validation and create session
+      req.session.email = loginField;
+      req.session.username = user.username || loginField;
+      req.session.onboardingComplete = user.onboardingComplete || false;
+      req.session.loginTime = Date.now();
+
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+          return res.status(500).json({ error: 'Session creation failed' });
+        }
+
+        console.log(`[Login] User logged in via device token: ${loginField}`);
+
+        return res.json({
+          success: true,
+          email: loginField,
+          username: user.username || loginField,
+          onboardingComplete: user.onboardingComplete || false,
+          sessionToken: req.sessionID,
+          deviceTokenAuth: true
+        });
+      });
+      return;
+    }
+
+    // Otherwise, proceed with normal password validation
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
 
     // Verify password with bcrypt
     const passwordMatch = await bcrypt.compare(password, user.passwordHash || '');
@@ -1219,6 +1340,365 @@ app.get('/onboarding', isAuthenticated, async (req, res) => {
   }
 });
 
+/**
+ * Generate knowledge gaps based on user diagnosis
+ * Creates diagnosis-specific priority questions to build comprehensive user profile
+ */
+function generateKnowledgeGaps(diagnosis) {
+  const diagnosisLower = diagnosis.toLowerCase();
+
+  // Core questions for all users (highest priority)
+  const coreQuestions = [
+    {
+      id: 'kg-001',
+      category: 'Safety',
+      question: 'Do you have an emergency contact who can be reached 24/7?',
+      priority: 1,
+      tier: 'critical'
+    },
+    {
+      id: 'kg-002',
+      category: 'Safety',
+      question: 'Do you have a crisis plan for when symptoms become severe?',
+      priority: 1,
+      tier: 'critical'
+    },
+    {
+      id: 'kg-003',
+      category: 'Medical',
+      question: 'What is your psychiatrist\'s name and contact information?',
+      priority: 1,
+      tier: 'critical'
+    },
+    {
+      id: 'kg-004',
+      category: 'Medical',
+      question: 'When is your next psychiatry appointment?',
+      priority: 1,
+      tier: 'critical'
+    },
+    {
+      id: 'kg-005',
+      category: 'Medications',
+      question: 'Are you experiencing any side effects from your medications?',
+      priority: 1,
+      tier: 'critical'
+    }
+  ];
+
+  // Diagnosis-specific questions
+  let diagnosisSpecific = [];
+
+  if (diagnosisLower.includes('bipolar')) {
+    diagnosisSpecific = [
+      {
+        id: 'kg-101',
+        category: 'Symptom Tracking',
+        question: 'How often do your moods cycle? (days, hours, minutes)',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-102',
+        category: 'Symptom Tracking',
+        question: 'Can you identify early warning signs of a manic episode?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-103',
+        category: 'Symptom Tracking',
+        question: 'Can you identify early warning signs of a depressive episode?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-104',
+        category: 'Daily Patterns',
+        question: 'How does your sleep change during mood episodes?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-105',
+        category: 'Medications',
+        question: 'Are you on a mood stabilizer? What is the dosage?',
+        priority: 2,
+        tier: 'high'
+      }
+    ];
+  } else if (diagnosisLower.includes('bpd') || diagnosisLower.includes('borderline')) {
+    diagnosisSpecific = [
+      {
+        id: 'kg-201',
+        category: 'Skills',
+        question: 'Have you been trained in DBT (Dialectical Behavior Therapy)?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-202',
+        category: 'Symptom Tracking',
+        question: 'What are your most common emotional triggers?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-203',
+        category: 'Symptom Tracking',
+        question: 'How quickly do your emotions shift (minutes, hours)?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-204',
+        category: 'Skills',
+        question: 'Which DBT distress tolerance skills work best for you?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-205',
+        category: 'Relationships',
+        question: 'Do you have a trusted person who can help during emotional crises?',
+        priority: 2,
+        tier: 'high'
+      }
+    ];
+  } else if (diagnosisLower.includes('ptsd') || diagnosisLower.includes('trauma')) {
+    diagnosisSpecific = [
+      {
+        id: 'kg-301',
+        category: 'Safety',
+        question: 'What are your known trauma triggers?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-302',
+        category: 'Skills',
+        question: 'What grounding techniques work best for you during flashbacks?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-303',
+        category: 'Symptom Tracking',
+        question: 'How often do you experience flashbacks or intrusive thoughts?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-304',
+        category: 'Safety',
+        question: 'Do you have a safe space you can retreat to when triggered?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-305',
+        category: 'Therapy',
+        question: 'Are you currently in trauma-focused therapy (EMDR, CPT, PE)?',
+        priority: 2,
+        tier: 'high'
+      }
+    ];
+  } else if (diagnosisLower.includes('depression')) {
+    diagnosisSpecific = [
+      {
+        id: 'kg-401',
+        category: 'Symptom Tracking',
+        question: 'What is your typical depression severity on a scale of 1-10?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-402',
+        category: 'Daily Patterns',
+        question: 'Is your depression worse at certain times of day?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-403',
+        category: 'Safety',
+        question: 'Do you experience suicidal thoughts? How often?',
+        priority: 1,
+        tier: 'critical'
+      },
+      {
+        id: 'kg-404',
+        category: 'Activities',
+        question: 'What activities help improve your mood, even slightly?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-405',
+        category: 'Medications',
+        question: 'Are you on an antidepressant? How long have you been on it?',
+        priority: 2,
+        tier: 'high'
+      }
+    ];
+  } else if (diagnosisLower.includes('anxiety')) {
+    diagnosisSpecific = [
+      {
+        id: 'kg-501',
+        category: 'Symptom Tracking',
+        question: 'What physical symptoms do you experience during anxiety?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-502',
+        category: 'Triggers',
+        question: 'What situations or thoughts trigger your anxiety most?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-503',
+        category: 'Skills',
+        question: 'What coping strategies help reduce your anxiety?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-504',
+        category: 'Daily Patterns',
+        question: 'Is your anxiety worse at certain times of day or in certain situations?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-505',
+        category: 'Medications',
+        question: 'Do you use PRN (as-needed) anxiety medication? How often?',
+        priority: 2,
+        tier: 'high'
+      }
+    ];
+  } else {
+    // Generic mental health questions for other diagnoses
+    diagnosisSpecific = [
+      {
+        id: 'kg-601',
+        category: 'Symptom Tracking',
+        question: 'What are your main symptoms?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-602',
+        category: 'Triggers',
+        question: 'What makes your symptoms worse?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-603',
+        category: 'Skills',
+        question: 'What coping strategies have you found helpful?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-604',
+        category: 'Daily Patterns',
+        question: 'Do your symptoms follow any patterns throughout the day?',
+        priority: 2,
+        tier: 'high'
+      },
+      {
+        id: 'kg-605',
+        category: 'Support',
+        question: 'Do you have a support system (friends, family, support group)?',
+        priority: 2,
+        tier: 'high'
+      }
+    ];
+  }
+
+  // General important questions (medium priority)
+  const generalQuestions = [
+    {
+      id: 'kg-701',
+      category: 'Therapy',
+      question: 'Are you currently in therapy? If yes, what type?',
+      priority: 3,
+      tier: 'medium'
+    },
+    {
+      id: 'kg-702',
+      category: 'Daily Patterns',
+      question: 'How consistent is your sleep schedule?',
+      priority: 3,
+      tier: 'medium'
+    },
+    {
+      id: 'kg-703',
+      category: 'Activities',
+      question: 'What daily activities are most important to you?',
+      priority: 3,
+      tier: 'medium'
+    },
+    {
+      id: 'kg-704',
+      category: 'Support',
+      question: 'Who should we contact if you\'re in crisis?',
+      priority: 1,
+      tier: 'critical'
+    },
+    {
+      id: 'kg-705',
+      category: 'Goals',
+      question: 'What are your main goals for using this mood tracking system?',
+      priority: 3,
+      tier: 'medium'
+    },
+    {
+      id: 'kg-706',
+      category: 'Medical',
+      question: 'Do you have any other medical conditions we should know about?',
+      priority: 3,
+      tier: 'medium'
+    },
+    {
+      id: 'kg-707',
+      category: 'Medications',
+      question: 'Are there any medications you cannot take (allergies/reactions)?',
+      priority: 2,
+      tier: 'high'
+    },
+    {
+      id: 'kg-708',
+      category: 'Environment',
+      question: 'What environmental factors affect your mental health (weather, season, etc.)?',
+      priority: 4,
+      tier: 'low'
+    },
+    {
+      id: 'kg-709',
+      category: 'Lifestyle',
+      question: 'How does exercise affect your mental health?',
+      priority: 4,
+      tier: 'low'
+    },
+    {
+      id: 'kg-710',
+      category: 'Lifestyle',
+      question: 'How does diet affect your mental health?',
+      priority: 4,
+      tier: 'low'
+    }
+  ];
+
+  // Combine all questions and sort by priority
+  const allQuestions = [...coreQuestions, ...diagnosisSpecific, ...generalQuestions];
+  return allQuestions.sort((a, b) => a.priority - b.priority);
+}
+
 // Complete onboarding
 app.post('/complete-onboarding', isAuthenticated, async (req, res) => {
   try {
@@ -1246,6 +1726,38 @@ app.post('/complete-onboarding', isAuthenticated, async (req, res) => {
       })
     }));
 
+    // Initialize knowledge gaps with priority questions based on diagnosis (fire and forget)
+    const knowledgeGaps = generateKnowledgeGaps(diagnosis);
+    const timestamp = Date.now();
+
+    // Store top 20 priority knowledge gaps in DynamoDB (parallel writes with error handling)
+    const gapWritePromises = knowledgeGaps.slice(0, 20).map(gap =>
+      dynamodb.send(new PutItemCommand({
+        TableName: 'sanctumtools-knowledge-gaps',
+        Item: marshall({
+          userEmail: email,
+          questionId: gap.id,
+          category: gap.category,
+          question: gap.question,
+          priority: gap.priority,
+          tier: gap.tier,
+          status: 'unanswered',
+          createdAt: new Date().toISOString(),
+          timestamp
+        })
+      }))
+    );
+
+    // Execute all writes in parallel and track failures
+    Promise.allSettled(gapWritePromises).then(gapResults => {
+      const failedGaps = gapResults.filter(result => result.status === 'rejected');
+      if (failedGaps.length > 0) {
+        console.warn(`[Onboarding] ${failedGaps.length}/${knowledgeGaps.slice(0, 20).length} knowledge gaps failed to write, but continuing...`);
+      }
+    }).catch(error => {
+      console.warn('[Onboarding] Error initializing knowledge gaps:', error);
+    });
+
     // Update session and save to DynamoDB
     req.session.onboardingComplete = true;
     req.session.save((err) => {
@@ -1254,7 +1766,7 @@ app.post('/complete-onboarding', isAuthenticated, async (req, res) => {
         return res.status(500).json({ error: 'Failed to save onboarding status' });
       }
       console.log(`[Onboarding] Completed for ${email}`);
-      res.json({ success: true, redirectUrl: '/dashboard' });
+      res.json({ success: true, redirectUrl: '/dashboard', knowledgeGapsInitialized: knowledgeGaps.slice(0, 20).length });
     });
   } catch (error) {
     console.error('Onboarding completion error:', error);
@@ -1439,6 +1951,20 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
     // Log the incoming message for debugging
     console.log(`[Chat API] User ${email} sent: ${message.substring(0, 100)}...`);
 
+    // CRITICAL FIX: Always retrieve user data from database instead of trusting request body
+    console.log(`[Chat API] Retrieving user context for ${email}`);
+    const userResult = await dynamodb.send(new GetItemCommand({
+      TableName: 'sanctumtools-users',
+      Key: { email: { S: email } }
+    }));
+
+    if (!userResult.Item) {
+      console.error(`[Chat API] User not found in database: ${email}`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = unmarshall(userResult.Item);
+
     // ============================================
     // CRISIS DETECTION - HIGHEST PRIORITY
     // This MUST happen BEFORE any other processing
@@ -1449,13 +1975,7 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
     if (crisisDetection.isCrisis) {
       console.log(`[CRISIS DETECTED] User ${email} - Keywords: ${crisisDetection.keywords.join(', ')}`);
 
-      // Get user data for emergency contacts
-      const userResult = await dynamodb.send(new GetItemCommand({
-        TableName: 'sanctumtools-users',
-        Key: { email: { S: email } }
-      }));
-
-      const user = unmarshall(userResult.Item);
+      // User data already retrieved above for DB consistency
 
       // Generate standard crisis response with user's emergency info if available
       const crisisResponse = getCrisisResponse({
@@ -1583,13 +2103,7 @@ app.post('/api/chat', isAuthenticated, async (req, res) => {
     // Only happens if no crisis detected
     // ============================================
 
-    // Get user data for context
-    const userResult = await dynamodb.send(new GetItemCommand({
-      TableName: 'sanctumtools-users',
-      Key: { email: { S: email } }
-    }));
-
-    const user = unmarshall(userResult.Item);
+    // User data already retrieved from database above
     const companionName = user.aiCompanionName || 'Assistant';
 
     // Detect therapeutic framework based on diagnosis
